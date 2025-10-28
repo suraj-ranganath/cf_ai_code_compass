@@ -6,12 +6,13 @@ export interface Env {
   DO_SESSIONS: DurableObjectNamespace;
   KV_PREFS: KVNamespace;
   R2_CACHE: R2Bucket;
-  REALTIME: any; // Realtime API binding
   GITHUB_TOKEN?: string;
   ENVIRONMENT: string;
   MAX_REPO_FILES: string;
   QUIZ_QUESTIONS_COUNT: string;
   STUDY_PLAN_DURATION_MINUTES: string;
+  LLM_MODEL: string;
+  EMBEDDING_MODEL: string;
 }
 
 export interface RepoAnalysisRequest {

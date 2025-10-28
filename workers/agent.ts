@@ -39,14 +39,96 @@ export const tools: Tool[] = [
   semanticSearchTool,
   embedTextTool,
   {
+    name: 'generate_concept_primer',
+    description: 'Generate a foundational primer document that prepares users for deep code exploration',
+    parameters: {
+      type: 'object',
+      properties: {
+        repoAnalysis: {
+          type: 'object',
+          description: 'Output from repo_map tool',
+        },
+        userGoal: {
+          type: 'string',
+          description: 'User stated learning objective',
+        },
+        userExperience: {
+          type: 'string',
+          description: 'Beginner, Intermediate, or Advanced',
+        },
+      },
+      required: ['repoAnalysis', 'userGoal'],
+    },
+    handler: async (params: any, env: Env) => {
+      const prompt = `Generate a repository primer document following this structure:
+
+# Repository Primer: ${params.repoAnalysis.name}
+
+## Overview
+Write 2-3 sentences explaining what problem this project solves, who uses it, and its scope.
+
+## Architecture
+Describe the primary architectural pattern and key components. Repository info:
+${JSON.stringify(params.repoAnalysis, null, 2)}
+
+## Technology Stack
+List technologies in order of importance with brief explanations.
+
+## Foundational Concepts
+For each prerequisite from the analysis, explain:
+- Concept name and 1-sentence explanation
+- Why it matters in this repo
+- Difficulty rating (⭐️ Beginner, ⭐️⭐️ Intermediate, ⭐️⭐️⭐️ Advanced)
+
+Prerequisites detected: ${JSON.stringify(params.repoAnalysis.prerequisites || [])}
+
+## Code Hotspots
+Highlight these files: ${JSON.stringify(params.repoAnalysis.hotspots || [])}
+
+## Development Workflow
+Explain setup, key commands, testing, and debugging.
+
+## Your Learning Path: ${params.userGoal}
+Provide specific guidance:
+- Which files to start with
+- Which concepts to prioritize
+- Exploration order
+- Estimated time
+
+User experience level: ${params.userExperience || 'Intermediate'}
+
+Generate a concise, actionable primer readable in 5-10 minutes.`;
+
+      try {
+        const model = env.LLM_MODEL || '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+        const response = await env.AI.run(model, {
+          messages: [
+            { role: 'system', content: 'You are an expert technical educator creating repository primers.' },
+            { role: 'user', content: prompt },
+          ],
+          max_tokens: 2000,
+          temperature: 0.7,
+        });
+
+        return {
+          primer: response.response || response.content || 'Error generating primer',
+          estimatedReadTime: 8,
+        };
+      } catch (error) {
+        console.error('Error generating primer:', error);
+        return { primer: 'Error generating primer', estimatedReadTime: 0 };
+      }
+    },
+  },
+  {
     name: 'generate_socratic_question',
-    description: 'Generates a Socratic question based on code context and user understanding',
+    description: 'Generate a Socratic question that guides understanding through inquiry',
     parameters: {
       type: 'object',
       properties: {
         context: {
           type: 'string',
-          description: 'The code or concept context',
+          description: 'Code snippet, file, or concept to question about',
         },
         difficulty: {
           type: 'number',
@@ -55,19 +137,93 @@ export const tools: Tool[] = [
         previousAnswers: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Previous user answers to adapt difficulty',
+          description: 'Previous user answers to calibrate difficulty',
+        },
+        userGoal: {
+          type: 'string',
+          description: 'User stated learning objective',
         },
       },
       required: ['context', 'difficulty'],
     },
     handler: async (params: any, env: Env) => {
-      // This will use Workers AI to generate questions
-      return { question: 'Stub question', hints: [] };
+      const difficultyDescriptions = {
+        1: 'Beginner - Observation and identification',
+        2: 'Developing - Understanding relationships',
+        3: 'Competent - Analysis and prediction',
+        4: 'Proficient - Synthesis and design',
+        5: 'Expert - Critical evaluation',
+      };
+
+      const prompt = `Generate a Socratic question following these principles:
+
+Context: ${params.context}
+
+Difficulty Level ${params.difficulty}: ${difficultyDescriptions[params.difficulty as keyof typeof difficultyDescriptions] || 'Medium'}
+
+Question Types:
+- Observational: Direct user to notice patterns
+- Analytical: Guide decomposition and understanding
+- Predictive: Test mental model accuracy
+- Comparative: Build connections to prior knowledge
+- Metacognitive: Develop learning strategies
+
+${params.previousAnswers && params.previousAnswers.length > 0 ? `Previous answers: ${params.previousAnswers.join(', ')}` : ''}
+${params.userGoal ? `User goal: ${params.userGoal}` : ''}
+
+Generate a JSON response with:
+{
+  "question": "The Socratic question",
+  "type": "analytical|observational|predictive|comparative|metacognitive",
+  "learningObjective": "What this question teaches",
+  "hints": ["Hint 1", "Hint 2", "Hint 3"],
+  "acceptableConcepts": ["concept1", "concept2"]
+}
+
+The question should guide discovery, not provide direct answers.`;
+
+      try {
+        const model = env.LLM_MODEL || '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+        const response = await env.AI.run(model, {
+          messages: [
+            { role: 'system', content: 'You are a Socratic teaching expert. Generate questions that guide understanding through inquiry.' },
+            { role: 'user', content: prompt },
+          ],
+          max_tokens: 800,
+          temperature: 0.8,
+        });
+
+        const content = response.response || response.content || '{}';
+        
+        // Try to parse JSON from response
+        try {
+          const parsed = JSON.parse(content);
+          return parsed;
+        } catch {
+          // Fallback if not valid JSON
+          return {
+            question: content,
+            type: 'analytical',
+            learningObjective: 'Understand the concept',
+            hints: ['Consider the context carefully', 'Think about similar patterns', 'Review the code structure'],
+            acceptableConcepts: [],
+          };
+        }
+      } catch (error) {
+        console.error('Error generating question:', error);
+        return {
+          question: 'What do you notice about this code?',
+          type: 'observational',
+          learningObjective: 'Begin exploration',
+          hints: [],
+          acceptableConcepts: [],
+        };
+      }
     },
   },
   {
     name: 'generate_study_plan',
-    description: 'Creates a personalized 10-15 minute study plan based on user struggles',
+    description: 'Create a personalized 10-15 minute study plan based on user struggles',
     parameters: {
       type: 'object',
       properties: {
@@ -84,13 +240,62 @@ export const tools: Tool[] = [
       required: ['struggles', 'repoContext'],
     },
     handler: async (params: any, env: Env) => {
-      // Generate study plan with Workers AI
-      return { plan: [], estimatedMinutes: 15 };
+      const prompt = `Create a personalized study plan for a developer who struggled with these concepts:
+${params.struggles.join(', ')}
+
+Repository context: ${params.repoContext}
+
+Generate a study plan that:
+1. Takes 10-15 minutes total
+2. Includes 3-5 learning activities
+3. Builds from foundational to advanced
+4. Uses the actual repository code
+5. Includes time estimates for each activity
+
+Format as JSON:
+{
+  "plan": [
+    {
+      "activity": "Read documentation for X",
+      "estimatedMinutes": 3,
+      "resources": ["file.ts", "https://docs.example.com"],
+      "objective": "Understand the basic concept"
+    }
+  ],
+  "totalMinutes": 15,
+  "focusAreas": ["concept1", "concept2"]
+}`;
+
+      try {
+        const model = env.LLM_MODEL || '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+        const response = await env.AI.run(model, {
+          messages: [
+            { role: 'system', content: 'You are a learning plan designer specializing in efficient, focused study sessions.' },
+            { role: 'user', content: prompt },
+          ],
+          max_tokens: 1000,
+          temperature: 0.7,
+        });
+
+        const content = response.response || response.content || '{}';
+        try {
+          return JSON.parse(content);
+        } catch {
+          return {
+            plan: [],
+            totalMinutes: 15,
+            focusAreas: params.struggles,
+          };
+        }
+      } catch (error) {
+        console.error('Error generating study plan:', error);
+        return { plan: [], totalMinutes: 15, focusAreas: [] };
+      }
     },
   },
   {
     name: 'generate_flashcards',
-    description: 'Creates 5 flashcards for spaced repetition based on key concepts',
+    description: 'Create exactly 5 spaced-repetition flashcards based on key concepts',
     parameters: {
       type: 'object',
       properties: {
@@ -103,12 +308,63 @@ export const tools: Tool[] = [
           type: 'string',
           description: 'Repository name for context',
         },
+        sessionContext: {
+          type: 'string',
+          description: 'Code examples and explanations from session',
+        },
       },
-      required: ['concepts'],
+      required: ['concepts', 'repoName'],
     },
     handler: async (params: any, env: Env) => {
-      // Generate flashcards with Workers AI
-      return { flashcards: [] };
+      const prompt = `Create exactly 5 spaced-repetition flashcards for these concepts from ${params.repoName}:
+${params.concepts.join(', ')}
+
+${params.sessionContext ? `Session context: ${params.sessionContext}` : ''}
+
+Each flashcard must:
+- Reference specific files, functions, or code in the repository
+- Be testable with a clear correct answer
+- Focus on one atomic concept
+- Include difficulty rating (1-5)
+
+Format as JSON array:
+{
+  "flashcards": [
+    {
+      "front": "Question about specific code in the repo",
+      "back": "Answer with explanation and code reference",
+      "concept": "Concept name",
+      "difficulty": 3,
+      "sourceFile": "path/to/file.ts",
+      "codeExample": "optional code snippet"
+    }
+  ]
+}
+
+Create exactly 5 flashcards. Mix difficulties: 1-2 easy, 2-3 medium, 0-1 hard.`;
+
+      try {
+        const model = env.LLM_MODEL || '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+        const response = await env.AI.run(model, {
+          messages: [
+            { role: 'system', content: 'You are a flashcard designer creating repository-specific study materials.' },
+            { role: 'user', content: prompt },
+          ],
+          max_tokens: 1500,
+          temperature: 0.7,
+        });
+
+        const content = response.response || response.content || '{"flashcards": []}';
+        try {
+          const parsed = JSON.parse(content);
+          return parsed;
+        } catch {
+          return { flashcards: [] };
+        }
+      } catch (error) {
+        console.error('Error generating flashcards:', error);
+        return { flashcards: [] };
+      }
     },
   },
 ];
@@ -123,20 +379,20 @@ export async function runAgentWorkflow(
   env: Env
 ): Promise<ChatMessage> {
   try {
-    // Build conversation history
-    const messages: AgentMessage[] = [
-      { role: 'assistant', content: SYSTEM_PROMPT },
+    // Build conversation history for AI
+    const aiMessages: Array<{ role: string; content: string }> = [
+      { role: 'system', content: SYSTEM_PROMPT },
       ...session.messages.map((msg) => ({
-        role: msg.role,
+        role: msg.role === 'system' ? 'assistant' : msg.role,
         content: msg.content,
       })),
       { role: 'user', content: userMessage },
     ];
 
     // Call Workers AI (Llama 3.3)
-    // Note: Actual Cloudflare Agents SDK may have different API
-    const response = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
-      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+    const model = env.LLM_MODEL || '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+    const response = await env.AI.run(model, {
+      messages: aiMessages,
       tools: tools.map((t) => ({
         type: 'function',
         function: {
@@ -170,18 +426,35 @@ export async function runAgentWorkflow(
         })
       );
 
-      // Continue conversation with tool results
-      // TODO: Make another AI call with tool results
+      // Make another AI call with tool results for continued reasoning
+      const followUpMessages = [
+        ...aiMessages,
+        {
+          role: 'assistant',
+          content: response.response || response.content || '',
+        },
+        {
+          role: 'user',
+          content: `Tool results: ${JSON.stringify(toolResults, null, 2)}\n\nPlease explain these findings to the user in a Socratic way.`,
+        },
+      ];
+
+      const followUpResponse = await env.AI.run(model, {
+        messages: followUpMessages,
+        max_tokens: 1000,
+        temperature: 0.7,
+      });
+
       return {
         role: 'assistant',
-        content: response.content || 'I used some tools to analyze the repository. Let me explain what I found...',
+        content: followUpResponse.response || followUpResponse.content || 'I analyzed the repository. Let me explain what I found...',
         timestamp: Date.now(),
       };
     }
 
     return {
       role: 'assistant',
-      content: response.content || 'I understand. Let me help you with that...',
+      content: response.response || response.content || 'I understand. Let me help you with that...',
       timestamp: Date.now(),
     };
   } catch (error) {

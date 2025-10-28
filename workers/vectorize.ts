@@ -1,13 +1,15 @@
 // vectorize.ts - Vectorize integration for semantic search and embeddings
 
 import type { Env, Tool } from './types';
+import { parseRepoUrl, getFileContent } from './github';
 
 /**
  * Generate embeddings for text using Workers AI
  */
 export async function generateEmbedding(text: string, env: Env): Promise<number[]> {
   try {
-    const response = await env.AI.run('@cf/baai/bge-base-en-v1.5', {
+    const model = env.EMBEDDING_MODEL || '@cf/baai/bge-base-en-v1.5';
+    const response = await env.AI.run(model, {
       text: [text],
     });
 
@@ -19,29 +21,81 @@ export async function generateEmbedding(text: string, env: Env): Promise<number[
 }
 
 /**
- * Store file content embeddings in Vectorize
+ * Chunk text into smaller pieces for embedding
+ */
+function chunkText(text: string, maxChunkSize: number = 1000): string[] {
+  const chunks: string[] = [];
+  const lines = text.split('\n');
+  let currentChunk = '';
+
+  for (const line of lines) {
+    if (currentChunk.length + line.length > maxChunkSize) {
+      if (currentChunk) {
+        chunks.push(currentChunk.trim());
+      }
+      currentChunk = line;
+    } else {
+      currentChunk += (currentChunk ? '\n' : '') + line;
+    }
+  }
+
+  if (currentChunk) {
+    chunks.push(currentChunk.trim());
+  }
+
+  return chunks.filter(c => c.length > 0);
+}
+
+/**
+ * Store file content embeddings in Vectorize with chunking for large files
  */
 export async function storeFileEmbeddings(
   repoName: string,
-  files: Array<{ path: string; content: string }>,
+  files: Array<{ path: string; content: string; language?: string }>,
   env: Env
-): Promise<void> {
-  const vectors = await Promise.all(
-    files.map(async (file) => {
-      const embedding = await generateEmbedding(file.content, env);
-      return {
-        id: `${repoName}:${file.path}`,
-        values: embedding,
-        metadata: {
-          repoName,
-          filePath: file.path,
-          contentPreview: file.content.substring(0, 200),
-        },
-      };
-    })
-  );
+): Promise<{ stored: number; skipped: number }> {
+  let stored = 0;
+  let skipped = 0;
 
-  await env.VECTORIZE_INDEX.upsert(vectors);
+  for (const file of files) {
+    try {
+      // Skip empty files
+      if (!file.content || file.content.length === 0) {
+        skipped++;
+        continue;
+      }
+
+      // Chunk large files
+      const chunks = chunkText(file.content, 1000);
+
+      // Generate and store embeddings for each chunk
+      const vectors = await Promise.all(
+        chunks.map(async (chunk, index) => {
+          const embedding = await generateEmbedding(chunk, env);
+          return {
+            id: `${repoName}:${file.path}:chunk${index}`,
+            values: embedding,
+            metadata: {
+              repoName,
+              filePath: file.path,
+              language: file.language || 'unknown',
+              chunkIndex: index,
+              totalChunks: chunks.length,
+              contentPreview: chunk.substring(0, 200),
+            },
+          };
+        })
+      );
+
+      await env.VECTORIZE_INDEX.upsert(vectors);
+      stored += chunks.length;
+    } catch (error) {
+      console.error(`Error embedding file ${file.path}:`, error);
+      skipped++;
+    }
+  }
+
+  return { stored, skipped };
 }
 
 /**
@@ -118,6 +172,101 @@ export async function findSimilarStruggles(
   return results.matches
     .map((match) => match.metadata?.concept as string)
     .filter(Boolean);
+}
+
+/**
+ * Ingest entire repository into Vectorize
+ */
+export async function ingestRepository(
+  repoUrl: string,
+  env: Env
+): Promise<{
+  success: boolean;
+  stats: {
+    filesProcessed: number;
+    chunksStored: number;
+    filesSkipped: number;
+    totalSize: number;
+  };
+  error?: string;
+}> {
+  try {
+    const { owner, name } = parseRepoUrl(repoUrl);
+    const repoName = `${owner}/${name}`;
+
+    // Fetch repository tree
+    const response = await fetch(
+      `https://api.github.com/repos/${owner}/${name}/git/trees/main?recursive=1`,
+      {
+        headers: {
+          'User-Agent': 'Cloudflare-Worker',
+          ...(env.GITHUB_TOKEN && { Authorization: `token ${env.GITHUB_TOKEN}` }),
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`GitHub API error: ${response.statusText}`);
+    }
+
+    const data: any = await response.json();
+    const maxFiles = parseInt(env.MAX_REPO_FILES || '50', 10);
+
+    // Filter to source files only
+    const sourceFiles = data.tree
+      .filter((item: any) => item.type === 'blob')
+      .filter((item: any) => {
+        const ext = item.path.split('.').pop()?.toLowerCase();
+        return ['js', 'ts', 'tsx', 'jsx', 'py', 'java', 'go', 'rs', 'cpp', 'c', 'md', 'txt'].includes(ext || '');
+      })
+      .slice(0, maxFiles);
+
+    // Fetch file contents
+    const files = await Promise.all(
+      sourceFiles.map(async (file: any) => {
+        try {
+          const content = await getFileContent(owner, name, file.path, 'main', env);
+          return {
+            path: file.path,
+            content,
+            language: file.path.split('.').pop() || 'unknown',
+          };
+        } catch (error) {
+          console.error(`Error fetching ${file.path}:`, error);
+          return null;
+        }
+      })
+    );
+
+    const validFiles = files.filter((f): f is { path: string; content: string; language: string } => f !== null);
+
+    // Store embeddings
+    const { stored, skipped } = await storeFileEmbeddings(repoName, validFiles, env);
+
+    const totalSize = validFiles.reduce((sum, f) => sum + f.content.length, 0);
+
+    return {
+      success: true,
+      stats: {
+        filesProcessed: validFiles.length,
+        chunksStored: stored,
+        filesSkipped: skipped,
+        totalSize,
+      },
+    };
+  } catch (error) {
+    console.error('Error ingesting repository:', error);
+    return {
+      success: false,
+      stats: {
+        filesProcessed: 0,
+        chunksStored: 0,
+        filesSkipped: 0,
+        totalSize: 0,
+      },
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
 }
 
 /**
