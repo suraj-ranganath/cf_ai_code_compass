@@ -1,9 +1,10 @@
 // App.tsx - Main React application component
 
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import './styles.css';
 import { analyzeRepo, sendChat, transcribeAudio } from './api';
 import { VoiceRecorder } from './voice';
+import ReactMarkdown from 'react-markdown';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -341,151 +342,217 @@ function App() {
 
   return (
     <div className="app">
+      {/* Header */}
       <header className="header">
-        <h1>🎓 Socratic Mentor</h1>
-        <p>Voice-first GitHub repository onboarding</p>
+        <div className="header-content">
+          <h1>🎓 Socratic Mentor</h1>
+          {sessionId && (
+            <button 
+              className="status-indicator"
+              title={isConnected ? 'Voice streaming active' : 'Voice streaming inactive'}
+            >
+              <span className={`status-dot ${isConnected ? 'active' : ''}`}></span>
+            </button>
+          )}
+        </div>
       </header>
 
-      <main className="main">
-        {/* Error Message */}
-        {error && (
-          <div className="error-message">
-            {error}
-          </div>
-        )}
+      {/* Main Content */}
+      {!sessionId ? (
+        <main className="main-content">
+          {/* Error/Success Messages */}
+          {error && <div className="error-message">⚠️ {error}</div>}
+          {successMessage && <div className="success-message">✓ {successMessage}</div>}
 
-        {/* Success Message */}
-        {successMessage && (
-          <div className="success-message">
-            {successMessage}
-          </div>
-        )}
-
-        {/* Loading Overlay */}
-        {isAnalyzing && (
-          <div className="loading-overlay">
-            <div className="loading-spinner"></div>
-            <div className="loading-text">Analyzing repository...</div>
-          </div>
-        )}
-
-        {!sessionId ? (
-          <div className="start-screen">
-            <div className="card">
-              <h2>Let's Begin Your Learning Journey</h2>
-              <p>Paste a GitHub repository URL and tell me what you want to learn or accomplish.</p>
-              
-              <form onSubmit={handleAnalyze} className="start-form">
-                <div className="form-group">
-                  <label htmlFor="repoUrl">GitHub Repository URL</label>
-                  <input
-                    id="repoUrl"
-                    type="url"
-                    value={repoUrl}
-                    onChange={(e) => setRepoUrl(e.target.value)}
-                    placeholder="https://github.com/username/repo"
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="goal">Your Goal</label>
-                  <textarea
-                    id="goal"
-                    value={goal}
-                    onChange={(e) => setGoal(e.target.value)}
-                    placeholder="e.g., I need to understand how authentication works in this codebase"
-                    rows={3}
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={useVoice}
-                      onChange={(e) => setUseVoice(e.target.checked)}
-                    />
-                    Enable voice interaction
-                  </label>
-                </div>
-
-                <button type="submit" className={`btn btn-primary ${isAnalyzing ? 'btn-loading' : ''}`} disabled={isAnalyzing}>
-                  {isAnalyzing ? 'Analyzing...' : 'Start Learning'}
-                </button>
-              </form>
+          {/* Welcome Section */}
+          <div className="voice-control">
+            <div className="voice-button" style={{ cursor: 'default', background: 'rgba(255, 255, 255, 0.15)' }}>
+              🎤
             </div>
+            <div className="voice-status">Voice-First Learning</div>
+            <div className="voice-hint">Learn any codebase through natural conversation</div>
           </div>
-        ) : (
-          <div className="chat-screen">
-            {useVoice && (
-              <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`}>
-                {isConnected ? '🟢 Voice streaming connected' : '🔴 Voice streaming disconnected'}
-              </div>
-            )}
-            <div className="messages">
-              {messages.map((msg, index) => (
-                <div key={index} className={`message message-${msg.role}`}>
-                  <div className="message-content">
-                    {msg.content}
-                  </div>
-                  <div className="message-time">
-                    {new Date(msg.timestamp).toLocaleTimeString()}
-                  </div>
-                </div>
-              ))}
-              {isLoading && (
-                <div className="message message-assistant">
-                  <div className="message-content">
-                    <span className="loading-dots">●●●</span>
-                  </div>
-                </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
 
-            <div className="input-area">
-              <form onSubmit={handleSendMessage} className="message-form">
+          {/* Start Form */}
+          <form onSubmit={handleAnalyze} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            <div style={{ background: 'var(--bg-card)', borderRadius: '16px', padding: '2rem', boxShadow: 'var(--shadow-md)' }}>
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem', fontWeight: '500' }}>
+                  GitHub Repository
+                </label>
                 <input
-                  type="text"
-                  value={inputMessage}
-                  onChange={(e) => setInputMessage(e.target.value)}
-                  placeholder="Type your answer or question..."
-                  disabled={isLoading}
-                  className="message-input"
+                  type="url"
+                  value={repoUrl}
+                  onChange={(e) => setRepoUrl(e.target.value)}
+                  placeholder="https://github.com/user/repo"
+                  required
+                  style={{
+                    width: '100%',
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '12px',
+                    padding: '1rem 1.5rem',
+                    color: 'var(--text-primary)',
+                    fontSize: '1rem',
+                  }}
                 />
-                
-                <div className="input-buttons">
-                  {useVoice && (
-                    <button
-                      type="button"
-                      onClick={handleVoiceToggle}
-                      className={`btn btn-voice ${isRecording ? 'recording' : ''}`}
-                      disabled={isLoading}
-                      title={isRecording ? 'Stop recording' : 'Start voice recording'}
-                    >
-                      {isRecording ? '⏹️ Stop' : '🎤 Voice'}
-                    </button>
-                  )}
-                  
-                  <button
-                    type="submit"
-                    className={`btn btn-send ${isLoading ? 'btn-loading' : ''}`}
-                    disabled={isLoading || !inputMessage.trim()}
-                  >
-                    {isLoading ? '' : 'Send'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-      </main>
+              </div>
 
-      <footer className="footer">
-        <p>Built with ❤️ on Cloudflare Edge | <a href="https://github.com/suraj-ranganath/cf_ai_repo_socratic_mentor" target="_blank" rel="noopener noreferrer">View on GitHub</a></p>
-      </footer>
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem', fontWeight: '500' }}>
+                  Your Learning Goal
+                </label>
+                <textarea
+                  value={goal}
+                  onChange={(e) => setGoal(e.target.value)}
+                  placeholder="What would you like to learn? (e.g., 'Understand the authentication system')"
+                  rows={3}
+                  required
+                  style={{
+                    width: '100%',
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '12px',
+                    padding: '1rem 1.5rem',
+                    color: 'var(--text-primary)',
+                    fontSize: '1rem',
+                    fontFamily: 'inherit',
+                    resize: 'vertical',
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', background: 'var(--bg-elevated)', borderRadius: '12px', marginBottom: '1.5rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', flex: 1 }}>
+                  <input
+                    type="checkbox"
+                    checked={useVoice}
+                    onChange={(e) => setUseVoice(e.target.checked)}
+                    style={{ marginRight: '0.75rem' }}
+                  />
+                  <span style={{ fontSize: '1.25rem', marginRight: '0.5rem' }}>🎤</span>
+                  <span style={{ color: 'var(--text-primary)', fontWeight: '500' }}>
+                    Enable Voice Mode
+                  </span>
+                </label>
+              </div>
+
+              <button 
+                type="submit" 
+                className="send-button" 
+                disabled={isAnalyzing}
+                style={{ width: '100%', justifyContent: 'center', fontSize: '1rem', padding: '1rem 2rem' }}
+              >
+                {isAnalyzing ? (
+                  <>
+                    <div className="loading">
+                      <div className="loading-dot"></div>
+                      <div className="loading-dot"></div>
+                      <div className="loading-dot"></div>
+                    </div>
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    ✨ Start Learning
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </main>
+      ) : (
+        <main className="main-content">
+          {/* Error/Success Messages */}
+          {error && <div className="error-message">⚠️ {error}</div>}
+          {successMessage && <div className="success-message">✓ {successMessage}</div>}
+
+          {/* Voice Control */}
+          {useVoice && (
+            <div className="voice-control">
+              <button
+                type="button"
+                onClick={handleVoiceToggle}
+                className={`voice-button ${isRecording ? 'listening' : ''}`}
+                disabled={isLoading}
+              >
+                {isRecording ? '⏹' : '🎤'}
+              </button>
+              <div className="voice-status">
+                {isRecording ? 'Listening...' : 'Tap to speak'}
+              </div>
+              <div className="voice-hint">
+                {isRecording ? 'Tap again to stop' : 'Or type your message below'}
+              </div>
+            </div>
+          )}
+
+          {/* Chat Messages */}
+          <div className="chat-container">
+            {messages.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-state-icon">💬</div>
+                <h2>Ready to Learn</h2>
+                <p>{useVoice ? 'Start speaking or type a message below' : 'Type a message to begin'}</p>
+              </div>
+            ) : (
+              <>
+                {messages.map((msg, index) => (
+                  <div key={index} className={`message ${msg.role}`}>
+                    <div className="message-avatar">
+                      {msg.role === 'user' ? '👤' : '🤖'}
+                    </div>
+                    <div className="message-content">
+                      <div className="message-text">
+                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {isLoading && (
+                  <div className="message assistant">
+                    <div className="message-avatar">🤖</div>
+                    <div className="message-content">
+                      <div className="loading">
+                        <div className="loading-dot"></div>
+                        <div className="loading-dot"></div>
+                        <div className="loading-dot"></div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </>
+            )}
+          </div>
+
+          {/* Input */}
+          <div className="input-container">
+            <form onSubmit={handleSendMessage} className="input-wrapper">
+              <textarea
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage(e);
+                  }
+                }}
+                placeholder={useVoice ? "Speak or type your message..." : "Type your message..."}
+                disabled={isLoading}
+                className="input-box"
+              />
+              <button
+                type="submit"
+                className="send-button"
+                disabled={isLoading || !inputMessage.trim()}
+              >
+                ➤
+              </button>
+            </form>
+          </div>
+        </main>
+      )}
     </div>
   );
 }
