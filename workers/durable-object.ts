@@ -1,6 +1,7 @@
 // durable-object.ts - Durable Object for session state and WebSocket handling
 
 import type { Env, SessionState, ChatMessage } from './types';
+import { runAgentWorkflow } from './agent';
 
 /**
  * SessionDurableObject manages persistent session state and WebSocket connections
@@ -124,19 +125,42 @@ export class SessionDurableObject {
     const sessionId = crypto.randomUUID();
     this.sessions.set(sessionId, server);
 
+    // Send connection acknowledgment
+    server.send(JSON.stringify({
+      type: 'connected',
+      sessionId,
+      message: 'WebSocket connected successfully',
+    }));
+
     // Handle incoming messages
     server.addEventListener('message', async (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data as string);
 
-        if (data.type === 'voice') {
-          // Handle voice input (base64 audio)
-          await this.handleVoiceInput(data.audio, server);
-        } else if (data.type === 'text') {
-          // Handle text input
-          await this.handleTextInput(data.message, server);
+        switch (data.type) {
+          case 'voice':
+            // Handle voice input (base64 audio)
+            await this.handleVoiceInput(data.audio, server);
+            break;
+          
+          case 'text':
+            // Handle text input
+            await this.handleTextInput(data.message, server);
+            break;
+          
+          case 'ping':
+            // Keep-alive ping
+            server.send(JSON.stringify({ type: 'pong' }));
+            break;
+          
+          default:
+            server.send(JSON.stringify({
+              type: 'error',
+              message: `Unknown message type: ${data.type}`,
+            }));
         }
       } catch (error) {
+        console.error('Error processing WebSocket message:', error);
         server.send(JSON.stringify({
           type: 'error',
           message: 'Failed to process message',
@@ -162,26 +186,42 @@ export class SessionDurableObject {
   }
 
   /**
-   * Handle voice input
-   * TODO: Integrate with Cloudflare Realtime API for speech-to-text
+   * Handle voice input - integrates with Cloudflare Realtime API
    */
   private async handleVoiceInput(audioData: string, socket: WebSocket): Promise<void> {
-    // Stub: In production, use Realtime API for transcription
-    const transcription = 'Voice input transcription placeholder';
+    try {
+      // In a full implementation, this would:
+      // 1. Send audio to Realtime API for transcription
+      // 2. Get transcribed text back
+      // 3. Process through agent workflow
+      // 4. Convert response to speech via TTS
+      // 5. Stream audio back to client
 
-    // Process as text
-    await this.handleTextInput(transcription, socket);
+      // For now, we'll process as text with a placeholder
+      socket.send(JSON.stringify({
+        type: 'status',
+        message: 'Processing voice input...',
+      }));
 
-    // Send back voice response (text-to-speech)
-    socket.send(JSON.stringify({
-      type: 'voice_response',
-      text: 'Response placeholder',
-      audio: 'base64_audio_placeholder',
-    }));
+      // Placeholder: In production, integrate with Realtime API
+      // const transcription = await this.env.REALTIME.transcribe(audioData);
+      const transcription = 'Voice transcription placeholder - integrate Realtime API here';
+
+      // Process transcribed text through agent
+      await this.handleTextInput(transcription, socket);
+
+      // TODO: Convert agent response to speech and stream back
+    } catch (error) {
+      console.error('Error handling voice input:', error);
+      socket.send(JSON.stringify({
+        type: 'error',
+        message: 'Failed to process voice input',
+      }));
+    }
   }
 
   /**
-   * Handle text input
+   * Handle text input - integrates with agent workflow
    */
   private async handleTextInput(message: string, socket: WebSocket): Promise<void> {
     const session = await this.state.storage.get<SessionState>('session');
@@ -194,33 +234,57 @@ export class SessionDurableObject {
       return;
     }
 
-    // Add user message to session
-    const userMessage: ChatMessage = {
-      role: 'user',
-      content: message,
-      timestamp: Date.now(),
-    };
+    try {
+      // Send processing status
+      socket.send(JSON.stringify({
+        type: 'status',
+        message: 'Thinking...',
+      }));
 
-    session.messages.push(userMessage);
+      // Add user message to session
+      const userMessage: ChatMessage = {
+        role: 'user',
+        content: message,
+        timestamp: Date.now(),
+      };
 
-    // TODO: Call agent workflow to get response
-    // For now, send acknowledgment
-    const response: ChatMessage = {
-      role: 'assistant',
-      content: `I received your message: "${message}". Let me analyze that...`,
-      timestamp: Date.now(),
-    };
+      session.messages.push(userMessage);
 
-    session.messages.push(response);
-    session.lastActivityAt = Date.now();
+      // Run agent workflow to get intelligent response
+      const agentResponse = await runAgentWorkflow(session, message, this.env);
 
-    await this.state.storage.put('session', session);
+      session.messages.push(agentResponse);
+      session.lastActivityAt = Date.now();
 
-    // Send response back
-    socket.send(JSON.stringify({
-      type: 'text_response',
-      message: response.content,
-    }));
+      // Check if user struggled (simple heuristic: message contains "I don't know", "confused", etc.)
+      const struggleIndicators = ['don\'t know', 'confused', 'unclear', 'help', 'stuck'];
+      if (struggleIndicators.some(indicator => message.toLowerCase().includes(indicator))) {
+        // Extract concepts from the conversation context
+        const recentMessages = session.messages.slice(-5);
+        const context = recentMessages.map(m => m.content).join(' ');
+        
+        // Simple concept extraction (in production, use NLP)
+        const words = context.split(' ').filter(w => w.length > 6);
+        if (words.length > 0 && !session.userStruggles.includes(words[0])) {
+          session.userStruggles.push(words[0]);
+        }
+      }
+
+      await this.state.storage.put('session', session);
+
+      // Send response back
+      socket.send(JSON.stringify({
+        type: 'text_response',
+        message: agentResponse.content,
+        timestamp: agentResponse.timestamp,
+      }));
+    } catch (error) {
+      console.error('Error handling text input:', error);
+      socket.send(JSON.stringify({
+        type: 'error',
+        message: 'Failed to process message',
+      }));
+    }
   }
 
   /**
