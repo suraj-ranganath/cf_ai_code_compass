@@ -250,7 +250,9 @@ wrangler dev --remote
 
 ## 🌐 Deployment
 
-### Deploy Workers
+### Manual Deployment
+
+#### Deploy Workers
 
 ```bash
 npm run deploy
@@ -258,21 +260,148 @@ npm run deploy
 wrangler deploy
 ```
 
-### Deploy Frontend (Pages)
+This deploys your Workers to Cloudflare's edge network globally.
 
+#### Deploy Frontend (Pages)
+
+**Option 1: Wrangler CLI**
 ```bash
 npm run deploy:frontend
 # or
-wrangler pages deploy pages-frontend/dist
+cd pages-frontend && npm run build
+wrangler pages deploy pages-frontend/dist --project-name=socratic-mentor
 ```
 
-Or connect your GitHub repo to Cloudflare Pages for automatic deployments on push.
+**Option 2: Git Integration (Recommended)**
+1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com/) → Pages
+2. Click "Create a project" → "Connect to Git"
+3. Select your GitHub repository
+4. Configure build settings:
+   - Build command: `cd pages-frontend && npm install && npm run build`
+   - Build output directory: `pages-frontend/dist`
+   - Root directory: `/`
+5. Click "Save and Deploy"
 
-### Verify Deployment
+Every push to `main` will automatically deploy!
 
+### Automated Deployment (GitHub Actions)
+
+This project includes a CI/CD pipeline in `.github/workflows/deploy.yml`.
+
+**Setup Required Secrets:**
+
+Go to your GitHub repository → Settings → Secrets and variables → Actions, then add:
+
+1. **CLOUDFLARE_API_TOKEN**: 
+   - Go to [Cloudflare Dashboard](https://dash.cloudflare.com/profile/api-tokens)
+   - Click "Create Token"
+   - Use "Edit Cloudflare Workers" template
+   - Add Account permissions: Workers Scripts (Edit), Workers KV Storage (Edit), Pages (Edit)
+   - Create token and copy it
+
+2. **CLOUDFLARE_ACCOUNT_ID**:
+   - Go to [Cloudflare Dashboard](https://dash.cloudflare.com/)
+   - Copy your Account ID from the right sidebar
+
+**What the CI/CD does:**
+- ✅ Runs linting and type checking on every push and PR
+- ✅ Deploys Workers to production on push to `main`
+- ✅ Builds and deploys Pages frontend on push to `main`
+- ✅ Runs tests (when available)
+
+**Manual workflow dispatch:**
+```bash
+# Trigger deployment manually from GitHub Actions UI
+# Repository → Actions → Deploy to Cloudflare → Run workflow
+```
+
+### Environment Variables & Secrets
+
+**Development (.dev.vars):**
+```bash
+# .dev.vars (for local development)
+GITHUB_TOKEN=ghp_your_token_here
+```
+
+**Production (Wrangler Secrets):**
+```bash
+# Set production secrets
+wrangler secret put GITHUB_TOKEN
+# Enter your GitHub token when prompted
+
+# Verify secrets
+wrangler secret list
+```
+
+**Environment Variables (wrangler.toml):**
+These are already configured but can be overridden:
+- `LLM_MODEL`: AI model for text generation (default: Llama 3.3)
+- `EMBEDDING_MODEL`: Model for embeddings (default: BGE)
+- `MAX_REPO_FILES`: Max files to analyze (default: 50)
+- `QUIZ_QUESTIONS_COUNT`: Questions per quiz (default: 5)
+- `STUDY_PLAN_DURATION_MINUTES`: Study plan length (default: 15)
+
+### Post-Deployment Verification
+
+**1. Check Workers Health:**
 ```bash
 curl https://your-worker.your-subdomain.workers.dev/health
 ```
+
+Expected response:
+```json
+{
+  "status": "healthy",
+  "timestamp": 1698547200000,
+  "environment": "production"
+}
+```
+
+**2. Check Pages Deployment:**
+Visit your Pages URL: `https://socratic-mentor.pages.dev`
+
+**3. Monitor Logs:**
+```bash
+# Real-time Workers logs
+wrangler tail
+
+# View in dashboard
+# https://dash.cloudflare.com → Workers & Pages → [your-worker] → Logs
+```
+
+**4. Test End-to-End:**
+```bash
+# Analyze a repo
+curl -X POST https://your-worker.workers.dev/api/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"repoUrl": "https://github.com/cloudflare/workers-sdk", "goal": "Test deployment"}'
+```
+
+### Rollback
+
+If something goes wrong:
+
+```bash
+# List previous deployments
+wrangler deployments list
+
+# Rollback to a specific version
+wrangler rollback --version-id <deployment-id>
+```
+
+### Custom Domain Setup
+
+**For Workers:**
+1. Cloudflare Dashboard → Workers & Pages → [your-worker]
+2. Click "Triggers" → "Add Custom Domain"
+3. Enter your domain (must be on Cloudflare)
+4. DNS records are automatically configured
+
+**For Pages:**
+1. Cloudflare Dashboard → Pages → [your-project]
+2. Click "Custom domains" → "Set up a custom domain"
+3. Enter your domain
+4. DNS records are automatically configured
 
 ---
 
