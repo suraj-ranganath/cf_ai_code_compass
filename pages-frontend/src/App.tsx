@@ -1,15 +1,14 @@
 // App.tsx - Main React application component
 
 import React, { useState, useEffect, useRef } from 'react';
+import './styles.css';
 import { analyzeRepo, sendChat, transcribeAudio } from './api';
 import { VoiceRecorder } from './voice';
-import { ReasoningPanel, type ReasoningStep } from './components/ReasoningPanel';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
-  reasoningSteps?: ReasoningStep[];
 }
 
 function App() {
@@ -28,9 +27,8 @@ function App() {
   const voiceRecorder = useRef<VoiceRecorder | null>(null);
   const websocket = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [showReasoning, setShowReasoning] = useState(false);
-  const [currentReasoning, setCurrentReasoning] = useState<ReasoningStep[]>([]);
-  const [activeMessageReasoning, setActiveMessageReasoning] = useState<{ [key: number]: ReasoningStep[] }>({});
+  const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize voice recorder
   useEffect(() => {
@@ -41,7 +39,7 @@ function App() {
 
   // Establish WebSocket connection when session is created
   useEffect(() => {
-    if (!sessionId || !useVoice) return;
+    if (!sessionId) return;
 
     const apiUrl = import.meta.env.VITE_API_URL || '';
     // Remove /api suffix if present, then add the full path
@@ -56,6 +54,18 @@ function App() {
       console.log('WebSocket connected');
       setIsConnected(true);
       setSuccessMessage('Voice streaming connected');
+      
+      // Setup client-side heartbeat (send ping every 25 seconds)
+      const pingInterval = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'ping' }));
+        } else {
+          clearInterval(pingInterval);
+        }
+      }, 25000);
+      
+      // Store interval for cleanup
+      (ws as any).pingInterval = pingInterval;
     };
 
     ws.onmessage = (event) => {
@@ -74,8 +84,8 @@ function App() {
             break;
 
           case 'reasoning_step':
-            // Add reasoning step to current reasoning
-            setCurrentReasoning((prev) => [...prev, data.step]);
+            // Skip reasoning steps - don't show tool calls to user
+            console.log('Tool invoked:', data.step.toolName);
             break;
 
           case 'transcription':
@@ -88,25 +98,13 @@ function App() {
             break;
 
           case 'text_response':
-            // Add assistant response with reasoning steps
-            const messageIndex = messages.length;
+            // Add assistant response (no reasoning steps shown)
             setMessages((prev) => [...prev, {
-              role: 'assistant',
+              role: 'assistant' as const,
               content: data.message,
               timestamp: data.timestamp,
-              reasoningSteps: currentReasoning,
             }]);
             
-            // Store reasoning for this message
-            if (currentReasoning.length > 0) {
-              setActiveMessageReasoning((prev) => ({
-                ...prev,
-                [messageIndex]: currentReasoning,
-              }));
-            }
-            
-            // Clear current reasoning for next message
-            setCurrentReasoning([]);
             setIsLoading(false);
             break;
 
@@ -117,6 +115,13 @@ function App() {
 
           case 'pong':
             // Keep-alive response
+            break;
+
+          case 'ping':
+            // Server heartbeat - respond with pong
+            if (websocket.current?.readyState === WebSocket.OPEN) {
+              websocket.current.send(JSON.stringify({ type: 'pong' }));
+            }
             break;
 
           default:
@@ -136,17 +141,35 @@ function App() {
     ws.onclose = () => {
       console.log('WebSocket disconnected');
       setIsConnected(false);
+      
+      // Attempt to reconnect with exponential backoff
+      if (reconnectAttempts < 5) {
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
+        console.log(`Reconnecting in ${delay}ms... (attempt ${reconnectAttempts + 1}/5)`);
+        
+        reconnectTimeoutRef.current = setTimeout(() => {
+          setReconnectAttempts((prev) => prev + 1);
+        }, delay);
+      } else {
+        setError('WebSocket disconnected. Please refresh the page.');
+      }
     };
 
     websocket.current = ws;
 
     // Cleanup on unmount
     return () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if ((ws as any).pingInterval) {
+        clearInterval((ws as any).pingInterval);
+      }
       if (ws.readyState === WebSocket.OPEN) {
         ws.close();
       }
     };
-  }, [sessionId, useVoice]);
+  }, [sessionId, reconnectAttempts]);
 
   // Auto-scroll to bottom of messages
   useEffect(() => {
@@ -167,30 +190,6 @@ function App() {
       return () => clearTimeout(timer);
     }
   }, [successMessage]);
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
-      // Toggle reasoning panel with 'R' key
-      if (e.key === 'r' || e.key === 'R') {
-        if (!e.ctrlKey && !e.metaKey && !e.altKey) {
-          const target = e.target as HTMLElement;
-          // Don't trigger if typing in input
-          if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
-            e.preventDefault();
-            setShowReasoning((prev) => !prev);
-          }
-        }
-      }
-      // Close reasoning panel with Escape
-      if (e.key === 'Escape' && showReasoning) {
-        setShowReasoning(false);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [showReasoning]);
 
   // Handle repository analysis
   const handleAnalyze = async (e: React.FormEvent) => {
@@ -243,16 +242,25 @@ function App() {
     setError(null);
 
     try {
-      const response = await sendChat(sessionId, inputMessage);
-      
-      setMessages((prev) => [...prev, {
-        role: 'assistant',
-        content: response.response.content,
-        timestamp: response.response.timestamp,
-      }]);
+      // Send via WebSocket if connected for real-time reasoning steps
+      if (websocket.current && websocket.current.readyState === WebSocket.OPEN) {
+        websocket.current.send(JSON.stringify({
+          type: 'text',
+          message: userMessage.content,
+        }));
+      } else {
+        // Fallback to HTTP POST (no reasoning steps will be shown)
+        const response = await sendChat(sessionId, userMessage.content);
+        
+        setMessages((prev) => [...prev, {
+          role: 'assistant',
+          content: response.response.content,
+          timestamp: response.response.timestamp,
+        }]);
+        setIsLoading(false);
+      }
     } catch (error) {
       setError('Failed to send message: ' + (error instanceof Error ? error.message : 'Unknown error'));
-    } finally {
       setIsLoading(false);
     }
   };
@@ -421,18 +429,6 @@ function App() {
                 <div key={index} className={`message message-${msg.role}`}>
                   <div className="message-content">
                     {msg.content}
-                    {msg.role === 'assistant' && msg.reasoningSteps && msg.reasoningSteps.length > 0 && (
-                      <button 
-                        className="reasoning-toggle-btn"
-                        onClick={() => {
-                          setActiveMessageReasoning({ [index]: msg.reasoningSteps! });
-                          setShowReasoning(true);
-                        }}
-                        title="Show AI reasoning"
-                      >
-                        🧠 Show reasoning
-                      </button>
-                    )}
                   </div>
                   <div className="message-time">
                     {new Date(msg.timestamp).toLocaleTimeString()}
@@ -442,22 +438,7 @@ function App() {
               {isLoading && (
                 <div className="message message-assistant">
                   <div className="message-content">
-                    <div className="thinking-indicator">
-                      <div className="thinking-dots">
-                        <span className="thinking-dot"></span>
-                        <span className="thinking-dot"></span>
-                        <span className="thinking-dot"></span>
-                      </div>
-                      {currentReasoning.length > 0 && (
-                        <button 
-                          className="reasoning-toggle-btn"
-                          onClick={() => setShowReasoning(true)}
-                          title="Show AI reasoning"
-                        >
-                          🧠 View reasoning
-                        </button>
-                      )}
-                    </div>
+                    <span className="loading-dots">●●●</span>
                   </div>
                 </div>
               )}
@@ -505,13 +486,6 @@ function App() {
       <footer className="footer">
         <p>Built with ❤️ on Cloudflare Edge | <a href="https://github.com/suraj-ranganath/cf_ai_repo_socratic_mentor" target="_blank" rel="noopener noreferrer">View on GitHub</a></p>
       </footer>
-
-      {/* Reasoning Panel */}
-      <ReasoningPanel
-        steps={showReasoning ? (Object.values(activeMessageReasoning)[0] || currentReasoning) : []}
-        isOpen={showReasoning}
-        onClose={() => setShowReasoning(false)}
-      />
     </div>
   );
 }

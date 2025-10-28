@@ -28,7 +28,10 @@ export function parseRepoUrl(repoUrl: string): GitHubRepo {
 /**
  * Fetch repository default branch
  */
-async function getDefaultBranch(owner: string, repo: string, env: Env): Promise<string> {
+/**
+ * Get the default branch of a GitHub repository
+ */
+export async function getDefaultBranch(owner: string, repo: string, env: Env): Promise<string> {
   const headers: Record<string, string> = {
     Accept: 'application/vnd.github.v3+json',
     'User-Agent': 'Cloudflare-Socratic-Mentor',

@@ -30,6 +30,17 @@ When asking questions:
 - Provide hints if user struggles (max 2 hints)
 - Mark concepts where user struggles for flashcard generation
 
+Available Tools - Use these strategically:
+- repo_map: Get repository structure and file overview (use FIRST when user provides new repo)
+- semantic_search: Find specific code examples and implementations (use when user asks about specific features/patterns)
+- generate_concept_primer: Create comprehensive explanations (use after gathering context with semantic_search)
+- generate_socratic_question: Create adaptive questions (use to test understanding)
+- generate_study_plan: Create structured learning paths (use when user wants organized approach)
+- generate_flashcards: Create review materials (use for concepts user struggled with)
+- embed_text: Generate embeddings (rarely needed directly)
+
+IMPORTANT: Always use semantic_search to find relevant code examples when answering questions about specific implementations or features. Don't rely only on repo_map.
+
 Your goal: Help the user build a mental model of the repository that enables confident contribution.`;
 
 /**
@@ -425,6 +436,7 @@ Ask questions that help the user understand the architecture, key components, an
       },
       function: async (args: any) => {
         // Capture tool invocation
+        console.log(`[REASONING] Tool called: ${t.name}`, args);
         const step = {
           type: 'tool_call',
           toolName: t.name,
@@ -435,10 +447,12 @@ Ask questions that help the user understand the architecture, key components, an
         reasoningSteps.push(step);
         
         if (onReasoningStep) {
+          console.log('[REASONING] Sending tool_call step to WebSocket');
           onReasoningStep(step);
         }
 
         const result = await t.handler(args, env);
+        console.log(`[REASONING] Tool ${t.name} completed`);
         
         // Capture tool result
         const resultStep = {
@@ -451,6 +465,7 @@ Ask questions that help the user understand the architecture, key components, an
         reasoningSteps.push(resultStep);
         
         if (onReasoningStep) {
+          console.log('[REASONING] Sending result step to WebSocket');
           onReasoningStep(resultStep);
         }
 
@@ -467,6 +482,8 @@ Ask questions that help the user understand the architecture, key components, an
         tools: toolFunctions,
       }
     ) as any;
+
+    console.log('[REASONING] Agent workflow complete. Reasoning steps:', reasoningSteps.length);
 
     return {
       role: 'assistant',

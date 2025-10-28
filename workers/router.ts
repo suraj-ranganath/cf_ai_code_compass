@@ -57,15 +57,38 @@ app.post('/api/analyze', async (c) => {
     });
 
     // Ingest repository into Vectorize for semantic search
-    // This runs asynchronously in the background
+    // Process in small batches (3 files at a time) to stay under subrequest limit
+    // Recursively process all files in separate request contexts
     c.executionCtx.waitUntil(
-      ingestRepository(repoUrl, c.env)
-        .then((result) => {
-          console.log(`Repository ingested: ${result.stats?.filesProcessed} files, ${result.stats?.chunksStored} chunks`);
-        })
-        .catch((error) => {
-          console.error('Background ingestion failed:', error);
-        })
+      (async () => {
+        let startIndex = 0;
+        let totalFiles = 0;
+        let totalChunks = 0;
+        
+        // Process all files in batches
+        while (true) {
+          try {
+            const result = await ingestRepository(repoUrl, c.env, startIndex, 3);
+            totalFiles += result.stats.filesProcessed;
+            totalChunks += result.stats.chunksStored;
+            
+            console.log(`Batch complete: ${result.stats.filesProcessed} files, ${result.stats.chunksStored} chunks (total: ${totalFiles} files, ${totalChunks} chunks)`);
+            
+            if (!result.hasMore) {
+              console.log(`✅ Full repository ingested: ${totalFiles} files, ${totalChunks} chunks`);
+              break;
+            }
+            
+            startIndex = result.nextIndex;
+            
+            // Small delay between batches to avoid overwhelming
+            await new Promise(resolve => setTimeout(resolve, 200));
+          } catch (error) {
+            console.error(`Batch ingestion failed at index ${startIndex}:`, error);
+            break;
+          }
+        }
+      })()
     );
 
     return c.json({
@@ -286,13 +309,15 @@ app.post('/api/plan', async (c) => {
 app.post('/api/ingest', async (c) => {
   try {
     const repoUrl = c.req.query('repo');
+    const startIndex = parseInt(c.req.query('start') || '0', 10);
+    const batchSize = parseInt(c.req.query('batch') || '3', 10);
 
     if (!repoUrl) {
       return c.json({ error: 'repo query parameter is required' }, 400);
     }
 
     // Trigger ingestion
-    const result = await ingestRepository(repoUrl, c.env);
+    const result = await ingestRepository(repoUrl, c.env, startIndex, batchSize);
 
     if (!result.success) {
       return c.json({
@@ -304,6 +329,8 @@ app.post('/api/ingest', async (c) => {
     return c.json({
       message: 'Repository ingested successfully',
       stats: result.stats,
+      hasMore: result.hasMore,
+      nextIndex: result.nextIndex,
     });
   } catch (error) {
     console.error('Error ingesting repository:', error);

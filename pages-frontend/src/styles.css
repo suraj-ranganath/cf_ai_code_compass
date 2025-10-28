@@ -528,6 +528,168 @@ body {
   background: var(--text-secondary);
 }
 
+/* Loading dots animation */
+.loading-dots {
+  font-size: 1.5rem;
+  letter-spacing: 0.2em;
+  color: #8b8b8b;
+  animation: loadingDots 1.4s ease-in-out infinite;
+}
+
+@keyframes loadingDots {
+  0%, 20% {
+    opacity: 0.3;
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.3;
+  }
+}
+
+/* OpenAI-style Thought Process */
+.thinking-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.thinking-text {
+  font-size: 0.9rem;
+  color: #8b8b8b;
+  font-weight: 500;
+  animation: thinkingBrightness 2s ease-in-out infinite;
+}
+
+@keyframes thinkingBrightness {
+  0%, 100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.thinking-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 12px;
+  border-left: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.thinking-step-preview {
+  font-size: 0.85rem;
+  color: #666;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: capitalize;
+  animation: fadeInStep 0.3s ease-out;
+}
+
+@keyframes fadeInStep {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.thought-process {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.thought-summary {
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.9rem;
+  color: #8b8b8b;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.2s ease;
+}
+
+.thought-summary::-webkit-details-marker {
+  display: none;
+}
+
+.thought-summary::before {
+  content: '▶';
+  display: inline-block;
+  font-size: 0.7rem;
+  transition: transform 0.2s ease;
+}
+
+details[open] .thought-summary::before {
+  transform: rotate(90deg);
+}
+
+.thought-summary:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.thought-content {
+  padding: 12px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.thought-step {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.step-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.step-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.step-title {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #e0e0e0;
+  text-transform: capitalize;
+}
+
+.step-description {
+  font-size: 0.8rem;
+  color: #888;
+  padding-left: 28px;
+  line-height: 1.4;
+}
+
+.thought-step.step-tool_call {
+  border-left: 2px solid #3b82f6;
+}
+
+.thought-step.step-result {
+  border-left: 2px solid #10b981;
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
   .header h1 {

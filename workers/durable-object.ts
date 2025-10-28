@@ -155,8 +155,13 @@ export class SessionDurableObject {
             break;
           
           case 'ping':
-            // Keep-alive ping
+            // Client keep-alive ping
             server.send(JSON.stringify({ type: 'pong' }));
+            break;
+          
+          case 'pong':
+            // Client responding to our heartbeat - just acknowledge
+            console.log('Client heartbeat acknowledged');
             break;
           
           default:
@@ -177,6 +182,7 @@ export class SessionDurableObject {
     // Handle connection close
     server.addEventListener('close', () => {
       this.sessions.delete(sessionId);
+      console.log(`WebSocket closed for session ${sessionId}`);
     });
 
     // Handle errors
@@ -307,12 +313,18 @@ export class SessionDurableObject {
         message: agentResponse.content,
         timestamp: agentResponse.timestamp,
       }));
+      console.log('Response sent successfully, connection still open');
     } catch (error) {
       console.error('Error handling text input:', error);
-      socket.send(JSON.stringify({
-        type: 'error',
-        message: 'Failed to process message: ' + (error instanceof Error ? error.message : 'Unknown error'),
-      }));
+      // Send error but don't close the connection
+      try {
+        socket.send(JSON.stringify({
+          type: 'error',
+          message: 'Failed to process message: ' + (error instanceof Error ? error.message : 'Unknown error'),
+        }));
+      } catch (sendError) {
+        console.error('Failed to send error message:', sendError);
+      }
     }
   }
 

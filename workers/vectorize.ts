@@ -1,7 +1,7 @@
 // vectorize.ts - Vectorize integration for semantic search and embeddings
 
 import type { Env, Tool } from './types';
-import { parseRepoUrl, getFileContent } from './github';
+import { parseRepoUrl, getFileContent, getDefaultBranch } from './github';
 
 /**
  * Generate embeddings for text using Workers AI
@@ -47,52 +47,75 @@ function chunkText(text: string, maxChunkSize: number = 1000): string[] {
 }
 
 /**
- * Store file content embeddings in Vectorize with chunking for large files
+ * Store file embeddings in Vectorize (batch processing to avoid subrequest limits)
  */
 export async function storeFileEmbeddings(
   repoName: string,
-  files: Array<{ path: string; content: string; language?: string }>,
+  files: Array<{ path: string; content: string; language: string }>,
   env: Env
 ): Promise<{ stored: number; skipped: number }> {
   let stored = 0;
   let skipped = 0;
 
+  // Process chunks in small batches to avoid subrequest limit (50 per request)
+  // Each embedding API call + Vectorize upsert counts as subrequests
+  // Plus GitHub API calls for fetching files (~8 subrequests)
+  // Be VERY conservative: process only 5 chunks at a time to stay well under limit
+  const CHUNK_BATCH_SIZE = 5;
+  
   for (const file of files) {
     try {
-      // Skip empty files
-      if (!file.content || file.content.length === 0) {
-        skipped++;
-        continue;
+      const chunks = chunkText(file.content);
+      const vectors: any[] = [];
+      
+      // Process chunks in small batches
+      for (let i = 0; i < chunks.length; i += CHUNK_BATCH_SIZE) {
+        const chunkBatch = chunks.slice(i, i + CHUNK_BATCH_SIZE);
+        
+        // Generate embeddings for this batch sequentially to stay under limit
+        for (let j = 0; j < chunkBatch.length; j++) {
+          try {
+            const chunk = chunkBatch[j];
+            const chunkIndex = i + j;
+            const embedding = await generateEmbedding(chunk, env);
+            
+            vectors.push({
+              id: `${repoName}:${file.path}:${chunkIndex}`,
+              values: embedding,
+              metadata: {
+                type: 'code',
+                repoName,
+                filePath: file.path,
+                language: file.language || 'unknown',
+                chunkIndex: chunkIndex,
+                totalChunks: chunks.length,
+                contentPreview: chunk.substring(0, 200),
+              },
+            });
+          } catch (error) {
+            console.error(`Error generating embedding:`, error);
+            // Continue with other chunks even if one fails
+          }
+        }
+        
+        // Small delay between chunk batches
+        if (i + CHUNK_BATCH_SIZE < chunks.length) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
       }
-
-      // Chunk large files
-      const chunks = chunkText(file.content, 1000);
-
-      // Generate and store embeddings for each chunk
-      const vectors = await Promise.all(
-        chunks.map(async (chunk, index) => {
-          const embedding = await generateEmbedding(chunk, env);
-          return {
-            id: `${repoName}:${file.path}:chunk${index}`,
-            values: embedding,
-            metadata: {
-              repoName,
-              filePath: file.path,
-              language: file.language || 'unknown',
-              chunkIndex: index,
-              totalChunks: chunks.length,
-              contentPreview: chunk.substring(0, 200),
-            },
-          };
-        })
-      );
-
-      await env.VECTORIZE_INDEX.upsert(vectors);
-      stored += chunks.length;
+      
+      // Upsert all vectors for this file at once
+      if (vectors.length > 0) {
+        await env.VECTORIZE_INDEX.upsert(vectors);
+        stored += vectors.length;
+      }
     } catch (error) {
       console.error(`Error embedding file ${file.path}:`, error);
       skipped++;
     }
+    
+    // Small delay between files
+    await new Promise(resolve => setTimeout(resolve, 50));
   }
 
   return { stored, skipped };
@@ -179,7 +202,9 @@ export async function findSimilarStruggles(
  */
 export async function ingestRepository(
   repoUrl: string,
-  env: Env
+  env: Env,
+  startIndex: number = 0,
+  batchSize: number = 3
 ): Promise<{
   success: boolean;
   stats: {
@@ -188,15 +213,20 @@ export async function ingestRepository(
     filesSkipped: number;
     totalSize: number;
   };
+  hasMore: boolean;
+  nextIndex: number;
   error?: string;
 }> {
   try {
     const { owner, name } = parseRepoUrl(repoUrl);
     const repoName = `${owner}/${name}`;
 
+    // Get the default branch first
+    const defaultBranch = await getDefaultBranch(owner, name, env);
+
     // Fetch repository tree
     const response = await fetch(
-      `https://api.github.com/repos/${owner}/${name}/git/trees/main?recursive=1`,
+      `https://api.github.com/repos/${owner}/${name}/git/trees/${defaultBranch}?recursive=1`,
       {
         headers: {
           'User-Agent': 'Cloudflare-Worker',
@@ -213,7 +243,7 @@ export async function ingestRepository(
     const maxFiles = parseInt(env.MAX_REPO_FILES || '50', 10);
 
     // Filter to source files only
-    const sourceFiles = data.tree
+    const allSourceFiles = data.tree
       .filter((item: any) => item.type === 'blob')
       .filter((item: any) => {
         const ext = item.path.split('.').pop()?.toLowerCase();
@@ -221,11 +251,29 @@ export async function ingestRepository(
       })
       .slice(0, maxFiles);
 
+    // Process only a batch of files in this call
+    const sourceFiles = allSourceFiles.slice(startIndex, startIndex + batchSize);
+    const hasMore = startIndex + batchSize < allSourceFiles.length;
+
+    if (sourceFiles.length === 0) {
+      return {
+        success: true,
+        stats: {
+          filesProcessed: 0,
+          chunksStored: 0,
+          filesSkipped: 0,
+          totalSize: 0,
+        },
+        hasMore: false,
+        nextIndex: startIndex,
+      };
+    }
+
     // Fetch file contents
     const files = await Promise.all(
       sourceFiles.map(async (file: any) => {
         try {
-          const content = await getFileContent(owner, name, file.path, 'main', env);
+          const content = await getFileContent(owner, name, file.path, defaultBranch, env);
           return {
             path: file.path,
             content,
@@ -253,6 +301,8 @@ export async function ingestRepository(
         filesSkipped: skipped,
         totalSize,
       },
+      hasMore,
+      nextIndex: startIndex + batchSize,
     };
   } catch (error) {
     console.error('Error ingesting repository:', error);
@@ -264,6 +314,8 @@ export async function ingestRepository(
         filesSkipped: 0,
         totalSize: 0,
       },
+      hasMore: false,
+      nextIndex: startIndex,
       error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
@@ -295,7 +347,9 @@ export const semanticSearchTool: Tool = {
     required: ['query', 'repoName'],
   },
   handler: async (params: { query: string; repoName: string; topK?: number }, env: Env) => {
-    return await semanticSearch(params.query, params.repoName, env, params.topK || 5);
+    // Coerce topK to number if it's a string (LLM sometimes passes strings)
+    const topKValue = typeof params.topK === 'string' ? parseInt(params.topK, 10) : (params.topK || 5);
+    return await semanticSearch(params.query, params.repoName, env, topKValue);
   },
 };
 
