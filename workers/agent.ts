@@ -1,5 +1,6 @@
 // agent.ts - Cloudflare Agent orchestration with Workers AI
 
+import { runWithTools } from '@cloudflare/ai-utils';
 import type { Env, SessionState, ChatMessage, AgentMessage, Tool } from './types';
 import { repoMapTool } from './github';
 import { semanticSearchTool, embedTextTool } from './vectorize';
@@ -379,9 +380,27 @@ export async function runAgentWorkflow(
   env: Env
 ): Promise<ChatMessage> {
   try {
+    // Build context about the repository for the AI
+    const repoContext = session.analysis ? `
+Repository: ${session.analysis.repoName}
+User Goal: ${session.goal}
+
+Repository Structure:
+${session.analysis.structure?.slice(0, 10).map((f: any) => `- ${f.path} (${f.language || 'file'})`).join('\n') || ''}
+
+Key Files: ${session.analysis.hotspots?.map((h: any) => h.path).slice(0, 5).join(', ') || 'None identified'}
+
+Prerequisites: ${session.analysis.prerequisites?.map((p: any) => p.name).slice(0, 5).join(', ') || 'None identified'}
+
+Primer: ${session.analysis.primer || 'No primer available'}
+
+You have analyzed this repository. Use this information to guide your Socratic questions.
+Ask questions that help the user understand the architecture, key components, and how they work together.
+` : '';
+
     // Build conversation history for AI
     const aiMessages: Array<{ role: string; content: string }> = [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: SYSTEM_PROMPT + '\n\n' + repoContext },
       ...session.messages.map((msg) => ({
         role: msg.role === 'system' ? 'assistant' : msg.role,
         content: msg.content,
@@ -389,79 +408,45 @@ export async function runAgentWorkflow(
       { role: 'user', content: userMessage },
     ];
 
-    // Call Workers AI (Llama 3.3)
-    const model = env.LLM_MODEL || '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
-    const response = await env.AI.run(model, {
-      messages: aiMessages,
-      tools: tools.map((t) => ({
-        type: 'function',
-        function: {
-          name: t.name,
-          description: t.description,
-          parameters: t.parameters,
-        },
-      })),
-      max_tokens: 1000,
-      temperature: 0.7,
-    });
+    const model = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+    
+    // Convert our tools to the format expected by runWithTools
+    const toolFunctions = tools.map((t) => ({
+      name: t.name,
+      description: t.description,
+      parameters: t.parameters as {
+        type: 'object';
+        properties: { [key: string]: { type: string; description?: string } };
+        required: string[];
+      },
+      function: async (args: any) => {
+        const result = await t.handler(args, env);
+        // Convert result to string if it's an object
+        return typeof result === 'string' ? result : JSON.stringify(result);
+      },
+    }));
 
-    // Handle tool calls if any
-    if (response.tool_calls && response.tool_calls.length > 0) {
-      const toolResults = await Promise.all(
-        response.tool_calls.map(async (toolCall: any) => {
-          const tool = tools.find((t) => t.name === toolCall.function.name);
-          if (!tool) {
-            return { error: `Unknown tool: ${toolCall.function.name}` };
-          }
-
-          try {
-            const result = await tool.handler(
-              JSON.parse(toolCall.function.arguments),
-              env
-            );
-            return result;
-          } catch (error) {
-            return { error: error instanceof Error ? error.message : 'Tool execution failed' };
-          }
-        })
-      );
-
-      // Make another AI call with tool results for continued reasoning
-      const followUpMessages = [
-        ...aiMessages,
-        {
-          role: 'assistant',
-          content: response.response || response.content || '',
-        },
-        {
-          role: 'user',
-          content: `Tool results: ${JSON.stringify(toolResults, null, 2)}\n\nPlease explain these findings to the user in a Socratic way.`,
-        },
-      ];
-
-      const followUpResponse = await env.AI.run(model, {
-        messages: followUpMessages,
-        max_tokens: 1000,
-        temperature: 0.7,
-      });
-
-      return {
-        role: 'assistant',
-        content: followUpResponse.response || followUpResponse.content || 'I analyzed the repository. Let me explain what I found...',
-        timestamp: Date.now(),
-      };
-    }
+    const response = await runWithTools(
+      env.AI,
+      model,
+      {
+        messages: aiMessages,
+        tools: toolFunctions,
+      }
+    ) as any;
 
     return {
       role: 'assistant',
-      content: response.response || response.content || 'I understand. Let me help you with that...',
+      content: response.response || response.content || response || 'I understand. Let me help you with that...',
       timestamp: Date.now(),
     };
   } catch (error) {
     console.error('Error in agent workflow:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Error details:', errorMessage);
     return {
       role: 'assistant',
-      content: 'I encountered an error processing your request. Please try again.',
+      content: `I encountered an error processing your request: ${errorMessage}. Please try again.`,
       timestamp: Date.now(),
     };
   }

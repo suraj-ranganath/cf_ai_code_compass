@@ -1,7 +1,7 @@
 // App.tsx - Main React application component
 
 import React, { useState, useEffect, useRef } from 'react';
-import { analyzeRepo, sendChat, getSession } from './api';
+import { analyzeRepo, sendChat } from './api';
 import { VoiceRecorder } from './voice';
 
 interface Message {
@@ -123,7 +123,7 @@ function App() {
 
     if (isRecording) {
       // Stop recording
-      const audioBlob = await voiceRecorder.current.stop();
+      await voiceRecorder.current.stop();
       setIsRecording(false);
 
       // TODO: Send audio to backend for transcription

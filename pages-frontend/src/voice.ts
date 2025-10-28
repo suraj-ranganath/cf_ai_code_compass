@@ -86,11 +86,10 @@ export class VoiceRecorder {
  */
 export class RealtimeClient {
   private ws: WebSocket | null = null;
-  private sessionId: string;
   private onMessage: (message: any) => void;
 
-  constructor(sessionId: string, onMessage: (message: any) => void) {
-    this.sessionId = sessionId;
+  constructor(_sessionId: string, onMessage: (message: any) => void) {
+    // sessionId will be used when implementing full WebRTC support
     this.onMessage = onMessage;
   }
 

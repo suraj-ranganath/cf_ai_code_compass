@@ -2,7 +2,7 @@
 
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import type { Env, RepoAnalysisRequest, ChatMessage } from './types';
+import type { Env, RepoAnalysisRequest, ChatMessage, SessionState } from './types';
 import { analyzeRepository } from './github';
 import { runAgentWorkflow, generateFlashcards, generateStudyPlan, tools } from './agent';
 import { ingestRepository, semanticSearch } from './vectorize';
@@ -86,7 +86,16 @@ app.post('/api/chat', async (c) => {
 
     // Get current session state
     const sessionResponse = await doStub.fetch('http://internal/state');
-    const session = await sessionResponse.json();
+    
+    if (!sessionResponse.ok) {
+      const errorData = await sessionResponse.json() as { error?: string };
+      return c.json({
+        error: errorData.error || 'Session not found',
+        details: 'Please start by analyzing a repository first',
+      }, 404);
+    }
+    
+    const session = await sessionResponse.json() as SessionState;
 
     // Run agent workflow
     const agentResponse = await runAgentWorkflow(session, message, c.env);
@@ -149,7 +158,12 @@ app.post('/api/flashcards', async (c) => {
     const doId = c.env.DO_SESSIONS.idFromName(sessionId);
     const doStub = c.env.DO_SESSIONS.get(doId);
     const sessionResponse = await doStub.fetch('http://internal/state');
-    const session = await sessionResponse.json();
+    
+    if (!sessionResponse.ok) {
+      return c.json({ error: 'Session not found' }, 404);
+    }
+    
+    const session = await sessionResponse.json() as SessionState;
 
     // Generate flashcards based on struggles
     const flashcardResults = await generateFlashcards(
@@ -188,7 +202,12 @@ app.post('/api/plan', async (c) => {
     const doId = c.env.DO_SESSIONS.idFromName(sessionId);
     const doStub = c.env.DO_SESSIONS.get(doId);
     const sessionResponse = await doStub.fetch('http://internal/state');
-    const session = await sessionResponse.json();
+    
+    if (!sessionResponse.ok) {
+      return c.json({ error: 'Session not found' }, 404);
+    }
+    
+    const session = await sessionResponse.json() as SessionState;
 
     // Generate study plan and flashcards
     const studyPlan = await generateStudyPlan(session, c.env);
@@ -263,7 +282,12 @@ app.post('/api/primer', async (c) => {
       const doId = c.env.DO_SESSIONS.idFromName(body.sessionId);
       const doStub = c.env.DO_SESSIONS.get(doId);
       const sessionResponse = await doStub.fetch('http://internal/state');
-      const session = await sessionResponse.json();
+      
+      if (!sessionResponse.ok) {
+        return c.json({ error: 'Session not found' }, 404);
+      }
+      
+      const session = await sessionResponse.json() as SessionState;
       repoAnalysis = session.analysis;
     } else if (body.repoUrl) {
       // Analyze repository on the fly
@@ -277,7 +301,7 @@ app.post('/api/primer', async (c) => {
     }
 
     // Generate primer using the tool
-    const primerTool = tools.find((t) => t.name === 'generate_concept_primer');
+    const primerTool = tools.find((t: any) => t.name === 'generate_concept_primer');
     if (!primerTool) {
       return c.json({ error: 'Primer tool not available' }, 500);
     }
@@ -312,10 +336,12 @@ app.get('/api/search', async (c) => {
       return c.json({ error: 'q query parameter is required' }, 400);
     }
 
-    const results = await semanticSearch(query, c.env, {
-      topK,
-      ...(repoName && { filter: { repoName } }),
-    });
+    const results = await semanticSearch(
+      query,
+      repoName || '',
+      c.env,
+      topK
+    );
 
     return c.json({ results });
   } catch (error) {

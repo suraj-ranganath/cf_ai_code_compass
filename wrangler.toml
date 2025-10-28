@@ -20,19 +20,20 @@ script_name = "cf-ai-repo-socratic-mentor"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["SessionDurableObject"]
+new_sqlite_classes = ["SessionDurableObject"]
 
 # KV for user preferences & lightweight state
 [[kv_namespaces]]
 binding = "KV_PREFS"
-id = "" # Add your KV namespace ID after creation
-preview_id = "" # Add your preview KV namespace ID
+id = "e9ecc35250ee4a3a893b4a25f30412a3"
+preview_id = "5a40327a43db4937a347ac263b57d508"
 
-# R2 for optional caching of repo data
-[[r2_buckets]]
-binding = "R2_CACHE"
-bucket_name = "socratic-mentor-cache"
-preview_bucket_name = "socratic-mentor-cache-preview"
+# R2 for optional caching of repo data (optional - enable R2 in dashboard first)
+# To enable: Go to Cloudflare Dashboard → R2 → Enable R2
+# Then run: npx wrangler r2 bucket create socratic-mentor-cache
+# [[r2_buckets]]
+# binding = "R2_CACHE"
+# bucket_name = "socratic-mentor-cache"
 
 # Environment variables
 [vars]
@@ -50,10 +51,10 @@ EMBEDDING_MODEL = "@cf/baai/bge-base-en-v1.5"
 [observability]
 enabled = true
 
-# Routes for Workers
-routes = [
-  { pattern = "socratic-mentor.example.com/*", zone_name = "example.com" }
-]
+# Routes for Workers (optional - configure your domain)
+# routes = [
+#   { pattern = "socratic-mentor.example.com/*", zone_name = "example.com" }
+# ]
 
 # Development configuration
 [env.development]

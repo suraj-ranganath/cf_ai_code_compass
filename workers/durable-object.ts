@@ -76,11 +76,14 @@ export class SessionDurableObject {
    * Update session state
    */
   private async handleUpdate(request: Request): Promise<Response> {
-    const updates = await request.json();
+    const updates = await request.json() as Partial<SessionState>;
     const session = await this.state.storage.get<SessionState>('session');
 
     if (!session) {
-      return new Response('Session not found', { status: 404 });
+      return new Response(JSON.stringify({ error: 'Session not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
     const updatedSession: SessionState = {
@@ -103,7 +106,10 @@ export class SessionDurableObject {
     const session = await this.state.storage.get<SessionState>('session');
 
     if (!session) {
-      return new Response('Session not found', { status: 404 });
+      return new Response(JSON.stringify({ error: 'Session not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
     return new Response(JSON.stringify(session), {
