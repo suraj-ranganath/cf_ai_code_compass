@@ -102,3 +102,23 @@ export async function generateFlashcards(sessionId: string): Promise<any> {
 
   return await response.json();
 }
+
+/**
+ * Transcribe audio to text
+ */
+export async function transcribeAudio(audioBase64: string, sessionId: string): Promise<{ transcription: string; sessionId: string }> {
+  const response = await fetch(`${API_BASE_URL}/transcribe`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ audio: audioBase64, sessionId }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to transcribe audio');
+  }
+
+  return await response.json();
+}

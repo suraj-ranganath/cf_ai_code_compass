@@ -1,7 +1,7 @@
 // App.tsx - Main React application component
 
 import React, { useState, useEffect, useRef } from 'react';
-import { analyzeRepo, sendChat } from './api';
+import { analyzeRepo, sendChat, transcribeAudio } from './api';
 import { VoiceRecorder } from './voice';
 
 interface Message {
@@ -24,6 +24,8 @@ function App() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const voiceRecorder = useRef<VoiceRecorder | null>(null);
+  const websocket = useRef<WebSocket | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
 
   // Initialize voice recorder
   useEffect(() => {
@@ -31,6 +33,97 @@ function App() {
       voiceRecorder.current = new VoiceRecorder();
     }
   }, [useVoice]);
+
+  // Establish WebSocket connection when session is created
+  useEffect(() => {
+    if (!sessionId || !useVoice) return;
+
+    const apiUrl = import.meta.env.VITE_API_URL || '';
+    // Remove /api suffix if present, then add the full path
+    const baseUrl = apiUrl.replace(/\/api$/, '');
+    const wsUrl = baseUrl.replace(/^http/, 'ws') + `/api/realtime/${sessionId}`;
+
+    console.log('Connecting to WebSocket:', wsUrl);
+
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      console.log('WebSocket connected');
+      setIsConnected(true);
+      setSuccessMessage('Voice streaming connected');
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log('WebSocket message:', data);
+
+        switch (data.type) {
+          case 'connected':
+            console.log('Connection acknowledged:', data.message);
+            break;
+
+          case 'status':
+            // Show status message temporarily
+            setSuccessMessage(data.message);
+            break;
+
+          case 'transcription':
+            // Show transcription
+            setMessages((prev) => [...prev, {
+              role: 'user',
+              content: data.text,
+              timestamp: Date.now(),
+            }]);
+            break;
+
+          case 'text_response':
+            // Add assistant response
+            setMessages((prev) => [...prev, {
+              role: 'assistant',
+              content: data.message,
+              timestamp: data.timestamp,
+            }]);
+            setIsLoading(false);
+            break;
+
+          case 'error':
+            setError(data.message);
+            setIsLoading(false);
+            break;
+
+          case 'pong':
+            // Keep-alive response
+            break;
+
+          default:
+            console.warn('Unknown message type:', data.type);
+        }
+      } catch (error) {
+        console.error('Failed to parse WebSocket message:', error);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+      setError('WebSocket connection error');
+      setIsConnected(false);
+    };
+
+    ws.onclose = () => {
+      console.log('WebSocket disconnected');
+      setIsConnected(false);
+    };
+
+    websocket.current = ws;
+
+    // Cleanup on unmount
+    return () => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
+    };
+  }, [sessionId, useVoice]);
 
   // Auto-scroll to bottom of messages
   useEffect(() => {
@@ -123,18 +216,63 @@ function App() {
 
     if (isRecording) {
       // Stop recording
-      await voiceRecorder.current.stop();
+      const audioBlob = await voiceRecorder.current.stop();
       setIsRecording(false);
+      setIsLoading(true);
 
-      // TODO: Send audio to backend for transcription
-      // For now, show placeholder
-      setMessages((prev) => [...prev, {
-        role: 'user',
-        content: '[Voice message sent - transcription pending]',
-        timestamp: Date.now(),
-      }]);
+      try {
+        // Convert audio to base64
+        const audioBase64 = await voiceRecorder.current.blobToBase64(audioBlob);
 
-      setSuccessMessage('Voice recorded successfully');
+        // Send via WebSocket if connected, otherwise fallback to HTTP
+        if (websocket.current && websocket.current.readyState === WebSocket.OPEN) {
+          // Stream via WebSocket for real-time processing
+          websocket.current.send(JSON.stringify({
+            type: 'voice',
+            audio: audioBase64,
+          }));
+          
+          setSuccessMessage('Voice message sent via WebSocket');
+        } else {
+          // Fallback to HTTP POST
+          console.log('WebSocket not connected, using HTTP fallback');
+          
+          const tempMessage: Message = {
+            role: 'user',
+            content: '[Voice message - transcribing...]',
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, tempMessage]);
+
+          // Transcribe audio via HTTP
+          const { transcription } = await transcribeAudio(audioBase64, sessionId);
+
+          // Replace temporary message with transcription
+          setMessages((prev) => {
+            const filtered = prev.filter((m) => m !== tempMessage);
+            return [...filtered, {
+              role: 'user',
+              content: transcription,
+              timestamp: Date.now(),
+            }];
+          });
+
+          // Send transcribed message to chat
+          const response = await sendChat(sessionId, transcription, true);
+
+          setMessages((prev) => [...prev, {
+            role: 'assistant',
+            content: response.response.content,
+            timestamp: response.response.timestamp,
+          }]);
+
+          setSuccessMessage('Voice message sent via HTTP');
+        }
+      } catch (error) {
+        setError('Failed to process voice message: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      } finally {
+        setIsLoading(false);
+      }
     } else {
       // Start recording
       try {
@@ -226,6 +364,11 @@ function App() {
           </div>
         ) : (
           <div className="chat-screen">
+            {useVoice && (
+              <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`}>
+                {isConnected ? '🟢 Voice streaming connected' : '🔴 Voice streaming disconnected'}
+              </div>
+            )}
             <div className="messages">
               {messages.map((msg, index) => (
                 <div key={index} className={`message message-${msg.role}`}>

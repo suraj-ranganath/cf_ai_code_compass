@@ -192,36 +192,45 @@ export class SessionDurableObject {
   }
 
   /**
-   * Handle voice input - integrates with Cloudflare Realtime API
+   * Handle voice input - integrates with Cloudflare Workers AI for transcription
    */
   private async handleVoiceInput(audioData: string, socket: WebSocket): Promise<void> {
     try {
-      // In a full implementation, this would:
-      // 1. Send audio to Realtime API for transcription
-      // 2. Get transcribed text back
-      // 3. Process through agent workflow
-      // 4. Convert response to speech via TTS
-      // 5. Stream audio back to client
-
-      // For now, we'll process as text with a placeholder
+      // Send status update
       socket.send(JSON.stringify({
         type: 'status',
-        message: 'Processing voice input...',
+        message: 'Transcribing voice...',
       }));
 
-      // Placeholder: In production, integrate with Realtime API
-      // const transcription = await this.env.REALTIME.transcribe(audioData);
-      const transcription = 'Voice transcription placeholder - integrate Realtime API here';
+      // Convert base64 to Uint8Array
+      const audioBytes = Uint8Array.from(atob(audioData), c => c.charCodeAt(0));
 
-      // Process transcribed text through agent
+      // Use Cloudflare Workers AI Whisper model for transcription
+      // The model expects a Uint8Array of audio data
+      const response = await this.env.AI.run('@cf/openai/whisper', {
+        audio: [...audioBytes], // Convert Uint8Array to regular array
+      });
+
+      const transcription = (response as { text?: string })?.text || '';
+
+      if (!transcription) {
+        throw new Error('No transcription returned');
+      }
+
+      // Send transcription back to client
+      socket.send(JSON.stringify({
+        type: 'transcription',
+        text: transcription,
+      }));
+
+      // Process transcribed text through agent workflow
       await this.handleTextInput(transcription, socket);
 
-      // TODO: Convert agent response to speech and stream back
     } catch (error) {
       console.error('Error handling voice input:', error);
       socket.send(JSON.stringify({
         type: 'error',
-        message: 'Failed to process voice input',
+        message: 'Failed to process voice input: ' + (error instanceof Error ? error.message : 'Unknown error'),
       }));
     }
   }
@@ -257,7 +266,9 @@ export class SessionDurableObject {
       session.messages.push(userMessage);
 
       // Run agent workflow to get intelligent response
+      console.log('Running agent workflow for message:', message);
       const agentResponse = await runAgentWorkflow(session, message, this.env);
+      console.log('Agent response received:', agentResponse);
 
       session.messages.push(agentResponse);
       session.lastActivityAt = Date.now();
@@ -279,6 +290,7 @@ export class SessionDurableObject {
       await this.state.storage.put('session', session);
 
       // Send response back
+      console.log('Sending text_response to client');
       socket.send(JSON.stringify({
         type: 'text_response',
         message: agentResponse.content,
@@ -288,7 +300,7 @@ export class SessionDurableObject {
       console.error('Error handling text input:', error);
       socket.send(JSON.stringify({
         type: 'error',
-        message: 'Failed to process message',
+        message: 'Failed to process message: ' + (error instanceof Error ? error.message : 'Unknown error'),
       }));
     }
   }

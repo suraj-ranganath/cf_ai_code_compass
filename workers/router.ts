@@ -136,6 +136,43 @@ app.post('/api/chat', async (c) => {
   }
 });
 
+// Transcribe voice to text using Cloudflare AI
+app.post('/api/transcribe', async (c) => {
+  try {
+    const body = await c.req.json<{ audio: string; sessionId: string }>();
+    const { audio, sessionId } = body;
+
+    if (!audio || !sessionId) {
+      return c.json({ error: 'audio and sessionId are required' }, 400);
+    }
+
+    // Convert base64 to ArrayBuffer
+    const audioData = Uint8Array.from(atob(audio), c => c.charCodeAt(0));
+
+    // Use Whisper model for transcription
+    const response = await c.env.AI.run('@cf/openai/whisper', {
+      audio: audioData.buffer,
+    });
+
+    const transcription = (response as { text?: string })?.text || '';
+
+    if (!transcription) {
+      return c.json({ error: 'Failed to transcribe audio' }, 500);
+    }
+
+    return c.json({
+      transcription,
+      sessionId,
+    });
+  } catch (error) {
+    console.error('Error transcribing audio:', error);
+    return c.json({
+      error: 'Failed to transcribe audio',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    }, 500);
+  }
+});
+
 // Get session state
 app.get('/api/session/:id', async (c) => {
   try {

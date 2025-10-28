@@ -409,12 +409,33 @@ wrangler rollback --version-id <deployment-id>
 
 ### Basic Workflow
 
-1. **Open the app**: Navigate to your deployed Pages URL
+1. **Open the app**: Navigate to your deployed Pages URL (e.g., https://d5c27cfc.socratic-mentor.pages.dev)
 2. **Paste repo URL**: Enter a GitHub repository (e.g., `https://github.com/cloudflare/workers-sdk`)
-3. **Speak your goal**: Click the mic and say something like:
-   > "I need to understand how the Wrangler CLI authenticates with Cloudflare"
-4. **Engage with questions**: The agent will ask Socratic questions to guide your exploration
-5. **Receive study plan**: Get a personalized 10-15 minute learning path with flashcards
+3. **Set your goal**: Describe what you want to learn (e.g., "Understand how Wrangler authenticates")
+4. **Enable voice**: Check the "Enable voice interaction" box to use real-time voice streaming
+5. **Engage with questions**: The agent will ask Socratic questions via voice or text
+   - 🎤 Click "Voice" button to record your answer (WebSocket streaming)
+   - ⌨️ Type your answer in the text input
+   - 🟢 Green indicator shows voice streaming is connected
+6. **Receive study plan**: Get a personalized 10-15 minute learning path with flashcards
+
+### Voice Features
+
+**Real-time Voice Streaming:**
+- Uses Cloudflare Workers native WebSocket support (no special Realtime product needed)
+- Audio transcribed using Workers AI Whisper model (`@cf/openai/whisper`)
+- Durable Objects manage WebSocket connections and per-session state
+- Live connection status indicator (🟢 connected / 🔴 disconnected)
+- Automatic fallback to HTTP POST if WebSocket unavailable
+
+**How it works:**
+1. Frontend establishes WebSocket connection to `/api/realtime/:sessionId`
+2. Click 🎤 Voice button to start recording
+3. Audio captured via browser MediaRecorder API
+4. Audio sent as base64 via WebSocket message `{type: "voice", audio: "..."}`
+5. Durable Object receives audio → transcribes with Whisper → sends back transcription
+6. Agent processes transcription → returns Socratic response
+7. All updates streamed in real-time (status, transcription, response)
 
 ### API Endpoints
 
@@ -519,6 +540,53 @@ Send a chat message (text or voice) to the agent.
   "sessionId": "uuid-v4"
 }
 ```
+
+#### `POST /api/transcribe`
+Transcribe audio to text using Workers AI Whisper (HTTP fallback when WebSocket unavailable).
+
+**Request Body:**
+```json
+{
+  "audio": "base64-encoded-audio-data",
+  "sessionId": "uuid-v4"
+}
+```
+
+**Response:**
+```json
+{
+  "transcription": "What is the purpose of the router module?",
+  "sessionId": "uuid-v4"
+}
+```
+
+#### `GET /api/realtime/:sessionId` (WebSocket Upgrade)
+Establish a WebSocket connection for real-time voice streaming.
+
+**Connection:**
+```javascript
+const ws = new WebSocket('wss://your-worker.workers.dev/api/realtime/session-id');
+
+// Send voice data
+ws.send(JSON.stringify({
+  type: 'voice',
+  audio: 'base64-audio-data'
+}));
+
+// Receive messages
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  // data.type: 'connected' | 'status' | 'transcription' | 'text_response' | 'error' | 'pong'
+};
+```
+
+**Message Types:**
+- `connected`: Connection established
+- `status`: Processing status updates (e.g., "Transcribing voice...")
+- `transcription`: Transcribed text from audio
+- `text_response`: Agent's response to your message
+- `error`: Error occurred during processing
+- `pong`: Keep-alive response to ping
 
 #### `GET /api/session/:id`
 Retrieve the current state of a session.
