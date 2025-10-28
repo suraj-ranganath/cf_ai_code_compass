@@ -56,10 +56,22 @@ app.post('/api/analyze', async (c) => {
       body: JSON.stringify({ analysis }),
     });
 
+    // Ingest repository into Vectorize for semantic search
+    // This runs asynchronously in the background
+    c.executionCtx.waitUntil(
+      ingestRepository(repoUrl, c.env)
+        .then((result) => {
+          console.log(`Repository ingested: ${result.stats?.filesProcessed} files, ${result.stats?.chunksStored} chunks`);
+        })
+        .catch((error) => {
+          console.error('Background ingestion failed:', error);
+        })
+    );
+
     return c.json({
       sessionId,
       analysis,
-      message: 'Repository analyzed successfully. Ready for Socratic dialogue.',
+      message: 'Repository analyzed successfully. Ready for Socratic dialogue. (Repository is being indexed for semantic search in the background)',
     });
   } catch (error) {
     console.error('Error analyzing repository:', error);
