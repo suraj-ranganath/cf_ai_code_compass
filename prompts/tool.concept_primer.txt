@@ -1,0 +1,126 @@
+Tool: generate_concept_primer
+Purpose: Generate a foundational "pre-read" document that prepares users for deep code exploration.
+
+## Input Parameters
+- repoAnalysis (required): Output from get_repo_map tool
+- userGoal (required): User's stated learning objective
+- userExperience (optional): User's self-reported experience level
+
+## Primer Structure
+
+### Section 1: Project Overview (2-3 sentences)
+- What problem does this project solve?
+- Who is the target user/developer?
+- What is the project's scope?
+
+Example:
+> "Wrangler is a CLI tool for developing and deploying Cloudflare Workers. It enables developers to build serverless applications on Cloudflare's edge network with features like local development, remote debugging, and automated deployments."
+
+### Section 2: Architecture at a Glance
+- Primary architectural pattern (MVC, microservices, layered, etc.)
+- Key components and their relationships
+- Data flow overview (request → process → response)
+
+Use ASCII diagrams if helpful:
+```
+User Request → Router → Controller → Service → Database
+              ↓
+          Middleware (Auth, Logging)
+```
+
+### Section 3: Technology Stack
+List technologies in order of importance:
+1. **Primary Language**: TypeScript (superset of JavaScript with static typing)
+2. **Runtime**: Node.js 18+ (JavaScript runtime built on Chrome's V8)
+3. **Framework**: Hono (lightweight web framework for edge computing)
+4. **Database**: D1 (Cloudflare's serverless SQL database)
+5. **Deployment**: Cloudflare Workers (edge compute platform)
+
+### Section 4: Foundational Concepts
+For each prerequisite concept identified:
+- **Concept Name**: Brief 1-sentence explanation
+- **Why it matters**: How this concept is used in the repo
+- **Learn more**: Curated external link (official docs preferred)
+- **Difficulty**: ⭐️ Beginner / ⭐️⭐️ Intermediate / ⭐️⭐️⭐️ Advanced
+
+Example:
+> **TypeScript** ⭐️  
+> Adds static type checking to JavaScript, catching errors at compile time.  
+> *In this repo*: Used throughout for type safety in Workers and API routes.  
+> [Learn more](https://www.typescriptlang.org/docs/handbook/typescript-in-5-minutes.html)
+
+### Section 5: Code Hotspots to Explore
+Highlight 3-5 files/modules to focus on:
+1. **`src/router.ts`** - Main entry point; handles HTTP routing
+2. **`workers/agent.ts`** - AI agent orchestration and LLM calls
+3. **`workers/github.ts`** - GitHub API integration for repo analysis
+4. **`workers/durable-object.ts`** - Session state management
+5. **`wrangler.toml`** - Configuration for Cloudflare bindings
+
+### Section 6: Development Workflow
+- How to set up the project locally
+- Key commands (`npm install`, `npm run dev`, `npm run deploy`)
+- Where to find tests
+- How to debug
+
+### Section 7: Goal-Specific Guidance
+Based on user's stated goal, provide:
+- Which files are most relevant
+- Which concepts to prioritize learning
+- What order to explore the codebase
+- Estimated time to achieve goal
+
+Example:
+> **Your Goal**: "Understand how authentication works"  
+> 
+> **Start Here**:
+> 1. Read `src/auth/middleware.ts` - Authentication middleware (5 min)
+> 2. Explore `src/auth/jwt.ts` - Token generation and validation (10 min)
+> 3. Trace a request through `src/routes/protected.ts` (5 min)
+> 
+> **Prerequisites**: Understand HTTP headers, JWT basics, middleware pattern
+> **Estimated Time**: 30-45 minutes
+
+## Output Format
+
+Return a Markdown document:
+
+```markdown
+# Repository Primer: owner/repo
+
+## Overview
+[2-3 sentences]
+
+## Architecture
+[Diagram + explanation]
+
+## Technology Stack
+[Ordered list with explanations]
+
+## Foundational Concepts
+[Concept blocks with difficulty ratings]
+
+## Code Hotspots
+[Numbered list of key files]
+
+## Development Workflow
+[Setup and commands]
+
+## Your Learning Path: [User Goal]
+[Customized guidance]
+
+---
+*Estimated read time: X minutes*
+```
+
+## Personalization Strategy
+- **Beginner users**: More detailed explanations, simpler vocabulary
+- **Intermediate users**: Assume familiarity with common patterns
+- **Advanced users**: Focus on unique/complex aspects, skip basics
+
+## Quality Criteria
+✅ Concise: Readable in 5-10 minutes
+✅ Actionable: Clear next steps
+✅ Contextual: Tied to user's goal
+✅ Accessible: No jargon without explanation
+✅ Visual: Diagrams where helpful

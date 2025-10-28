@@ -1,0 +1,41 @@
+{
+  "name": "cf_ai_repo_socratic_mentor",
+  "version": "1.0.0",
+  "description": "Voice-first Socratic agent for GitHub repo onboarding powered by Cloudflare AI",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "build:frontend": "cd pages-frontend && npm run build",
+    "deploy:frontend": "wrangler pages deploy pages-frontend/dist",
+    "start": "wrangler dev",
+    "tail": "wrangler tail",
+    "test": "vitest"
+  },
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "ai",
+    "llm",
+    "voice",
+    "socratic",
+    "github",
+    "onboarding"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@cloudflare/ai": "^1.0.0",
+    "@cloudflare/workers-types": "^4.20240821.1",
+    "hono": "^4.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "typescript": "^5.5.3",
+    "vitest": "^1.6.0",
+    "wrangler": "^3.72.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

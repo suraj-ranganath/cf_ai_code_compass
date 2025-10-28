@@ -1,0 +1,147 @@
+Tool: generate_socratic_quiz
+Purpose: Generate Socratic questions that guide understanding through inquiry rather than direct instruction.
+
+## Input Parameters
+- context (required): Code snippet, file, or concept to question about
+- difficulty (required): 1-5 scale of question difficulty
+- previousAnswers (optional): Array of previous user answers to calibrate difficulty
+- userGoal (optional): User's stated learning objective to maintain relevance
+
+## Question Generation Principles
+
+### 1. The Socratic Method
+Ask questions that:
+- **Probe assumptions**: "What are you assuming about how this function works?"
+- **Explore evidence**: "What in the code led you to that conclusion?"
+- **Discover implications**: "If that's true, what would we expect to see in [related code]?"
+- **Examine alternatives**: "What other approaches could achieve the same result?"
+- **Reflect on process**: "How did you figure that out?"
+
+### 2. Question Difficulty Levels
+
+**Level 1 (Beginner)**: Observation and identification
+- "What data type is this variable?"
+- "How many parameters does this function accept?"
+- "Which file imports this module?"
+
+**Level 2 (Developing)**: Understanding relationships
+- "Why do you think this function is async?"
+- "How does this component communicate with its parent?"
+- "What triggers this event handler?"
+
+**Level 3 (Competent)**: Analysis and prediction
+- "What would happen if we removed this null check?"
+- "Why might the developers have used a Map instead of an array here?"
+- "How does this pattern prevent race conditions?"
+
+**Level 4 (Proficient)**: Synthesis and design
+- "How would you refactor this to support [new requirement]?"
+- "What trade-offs did the developers make in this implementation?"
+- "How does this design decision impact testability?"
+
+**Level 5 (Expert)**: Critical evaluation
+- "What are the performance implications of this approach at scale?"
+- "How does this architecture handle eventual consistency?"
+- "What security considerations should we be aware of here?"
+
+### 3. Question Types
+
+**Observational**: Direct the user to notice specific patterns
+> "Look at the error handling in this function. What do you notice about the different error types?"
+
+**Analytical**: Guide decomposition and understanding
+> "This middleware chain has three stages. What is each stage responsible for?"
+
+**Predictive**: Test mental model accuracy
+> "If we call this function with an empty array, what path through the code will it take?"
+
+**Comparative**: Build connections to prior knowledge
+> "How does this React hook differ from class component lifecycle methods?"
+
+**Metacognitive**: Develop learning strategies
+> "What strategy would you use to trace where this value comes from?"
+
+### 4. Adaptive Difficulty
+Adjust based on previous answers:
+- **Incorrect answer**: Drop 1 difficulty level, provide hint
+- **Correct but struggled**: Maintain level, reinforce concept
+- **Correct and confident**: Increase 1 level, introduce complexity
+- **Multiple struggles**: Reset to level 1, build foundations
+
+### 5. Hint System
+Each question includes progressive hints:
+
+**Hint 1 (Directional)**: Point to relevant code location
+> "Take a closer look at lines 45-52. What's being returned?"
+
+**Hint 2 (Leading Question)**: Ask a simpler sub-question
+> "Let's start simpler: What happens when the API call succeeds?"
+
+**Hint 3 (Conceptual)**: Explain the underlying concept briefly
+> "This uses the Observer pattern - objects subscribe to events and get notified when they occur."
+
+## Output Format
+
+Return a JSON object:
+
+```json
+{
+  "id": "question_uuid",
+  "question": "Why do you think this function uses Promise.all() instead of sequential awaits?",
+  "context": "// Code snippet\nasync function fetchData() {\n  return Promise.all([...]);\n}",
+  "difficulty": 3,
+  "type": "analytical",
+  "learningObjective": "Understand asynchronous execution patterns and performance optimization",
+  "hints": [
+    "Consider what happens when multiple async operations run in parallel vs. sequence.",
+    "What's the difference in total execution time between Promise.all() and sequential awaits?",
+    "Promise.all() runs operations concurrently, reducing total wait time when operations are independent."
+  ],
+  "acceptableConcepts": [
+    "concurrency",
+    "parallel execution",
+    "performance optimization",
+    "independent operations"
+  ],
+  "followUpQuestions": [
+    "What would be a case where sequential awaits are better?",
+    "How would you handle if one of these promises rejects?"
+  ]
+}
+```
+
+## Question Sequencing
+
+Create a progression that builds understanding:
+
+1. **Foundation**: Basic observations and identification
+2. **Connection**: Link concepts to user's prior knowledge
+3. **Application**: Apply understanding to specific code
+4. **Analysis**: Break down complex interactions
+5. **Synthesis**: Connect multiple concepts
+6. **Evaluation**: Assess design decisions
+
+Example sequence for "understanding authentication":
+1. "What information does this JWT token contain?" (Level 1)
+2. "Why is the token stored in an HTTP-only cookie?" (Level 2)
+3. "How does the middleware verify the token signature?" (Level 3)
+4. "What would happen if the secret key was compromised?" (Level 4)
+5. "How would you implement token rotation for this system?" (Level 5)
+
+## Struggle Detection
+
+Mark when user struggles with:
+- Incorrect answer after 2 hints
+- Requesting hints immediately
+- Expressing confusion explicitly
+- Long delays before answering
+
+Store struggled concepts in session for flashcard generation.
+
+## Quality Criteria
+✅ **Clear**: Unambiguous phrasing
+✅ **Answerable**: Based on available code/context
+✅ **Purposeful**: Tied to learning objective
+✅ **Socratic**: Guides discovery, doesn't tell
+✅ **Engaging**: Sparks curiosity
+✅ **Progressive**: Builds on prior understanding

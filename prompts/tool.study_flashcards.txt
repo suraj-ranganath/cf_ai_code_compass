@@ -1,0 +1,157 @@
+Tool: generate_study_flashcards
+Purpose: Create exactly 5 spaced-repetition flashcards based on concepts the user struggled with during the Socratic walk-through.
+
+## Input Parameters
+- struggles (required): Array of concept names the user struggled with
+- repoName (required): Repository name for context
+- sessionContext (optional): Code examples and explanations from the session
+
+## Flashcard Design Principles
+
+### 1. Focus on Struggled Concepts
+Prioritize concepts where user:
+- Gave incorrect answers
+- Needed multiple hints
+- Explicitly expressed confusion
+- Took unusually long to respond
+
+### 2. Repository-Specific Questions
+Ground every flashcard in the actual repository:
+- Use real function names, variable names, file paths
+- Reference specific code snippets
+- Include repository-specific implementation details
+
+### 3. Optimal Difficulty
+**Too Easy**: "What language is this project written in?"
+**Too Hard**: "Explain the complete authentication flow including edge cases."
+**Just Right**: "In `auth/middleware.ts`, what does the `verifyToken()` function return if the JWT signature is invalid?"
+
+### 4. Flashcard Types
+
+**Type A: Code → Concept**
+- Front: Code snippet
+- Back: What pattern/concept it demonstrates
+
+**Type B: Concept → Implementation**
+- Front: Concept name + repository context
+- Back: How it's implemented in this repo
+
+**Type C: Scenario → Answer**
+- Front: "What happens when...?" question
+- Back: Explanation with code reference
+
+**Type D: Comparison**
+- Front: "How does X differ from Y in this repo?"
+- Back: Key differences with examples
+
+**Type E: Debugging**
+- Front: Code with bug + symptoms
+- Back: Explanation of issue + fix
+
+### 5. Spaced Repetition Optimization
+Mark difficulty to guide spacing:
+- **Easy (1)**: Review in 3 days
+- **Medium (2-3)**: Review in 1 day
+- **Hard (4-5)**: Review in 4 hours
+
+## Output Format
+
+Return an array of exactly 5 flashcards:
+
+```json
+{
+  "flashcards": [
+    {
+      "id": "flashcard_uuid",
+      "front": "In `workers/agent.ts`, what does the `runAgentWorkflow()` function do when it receives tool_calls from the LLM?",
+      "back": "It iterates through each tool call, finds the matching tool handler by name, executes it with the parsed arguments, and collects the results to send back to the LLM for continued reasoning.",
+      "concept": "LLM Tool Use Pattern",
+      "difficulty": 3,
+      "sourceFile": "workers/agent.ts",
+      "codeExample": "const toolResults = await Promise.all(\n  response.tool_calls.map(async (toolCall) => {\n    const tool = tools.find((t) => t.name === toolCall.function.name);\n    return await tool.handler(JSON.parse(toolCall.function.arguments), env);\n  })\n);"
+    },
+    {
+      "id": "flashcard_uuid_2",
+      "front": "Why does `SessionDurableObject` use Durable Object Storage instead of KV for session state?",
+      "back": "Durable Objects provide strongly consistent storage with WebSocket support, enabling real-time updates and guaranteed read-your-writes consistency. KV is eventually consistent and doesn't support persistent WebSocket connections.",
+      "concept": "Cloudflare Storage Patterns",
+      "difficulty": 4,
+      "sourceFile": "workers/durable-object.ts",
+      "codeExample": null
+    },
+    {
+      "id": "flashcard_uuid_3",
+      "front": "What would happen if you called `analyzeRepository()` on a private GitHub repo without setting GITHUB_TOKEN?",
+      "back": "The GitHub API request would fail with a 404 or 403 error. Private repos require authentication via personal access token in the Authorization header.",
+      "concept": "GitHub API Authentication",
+      "difficulty": 2,
+      "sourceFile": "workers/github.ts",
+      "codeExample": "if (env.GITHUB_TOKEN) {\n  headers.Authorization = `token ${env.GITHUB_TOKEN}`;\n}"
+    },
+    {
+      "id": "flashcard_uuid_4",
+      "front": "In `workers/vectorize.ts`, what does the `topK` parameter control when calling `VECTORIZE_INDEX.query()`?",
+      "back": "It specifies the maximum number of nearest-neighbor matches to return from the vector similarity search. Higher topK returns more results but increases latency and cost.",
+      "concept": "Vector Similarity Search",
+      "difficulty": 2,
+      "sourceFile": "workers/vectorize.ts",
+      "codeExample": "const results = await env.VECTORIZE_INDEX.query(queryEmbedding, {\n  topK: 5,\n  filter: { repoName },\n  returnMetadata: true,\n});"
+    },
+    {
+      "id": "flashcard_uuid_5",
+      "front": "How does the Realtime API connection in `voice.ts` differ from a standard WebSocket?",
+      "back": "Cloudflare Realtime API is optimized for low-latency audio/video streaming with built-in WebRTC support, automatic reconnection, and edge-based routing. Standard WebSockets require manual implementation of these features.",
+      "concept": "Realtime API vs WebSocket",
+      "difficulty": 4,
+      "sourceFile": "pages-frontend/src/voice.ts",
+      "codeExample": null
+    }
+  ]
+}
+```
+
+## Selection Strategy
+
+From all struggled concepts, select 5 using this algorithm:
+
+1. **Group by severity**: Most struggled → occasionally struggled
+2. **Diversify concepts**: Cover different areas (architecture, API usage, patterns)
+3. **Prioritize actionable**: Concepts likely to come up again
+4. **Balance difficulty**: Mix of 1-2 easy, 2-3 medium, 0-1 hard
+5. **Include code**: At least 3 flashcards with code examples
+
+## Quality Criteria
+
+Each flashcard must:
+✅ **Be specific**: Reference exact files, functions, lines
+✅ **Be testable**: Clear correct answer
+✅ **Be atomic**: One concept per card
+✅ **Be contextual**: Tied to the actual repository
+✅ **Be memorable**: Include concrete examples
+✅ **Be useful**: Reinforce understanding needed for user's goal
+
+Avoid:
+❌ Generic programming questions unrelated to repo
+❌ Trivial facts (file names, line counts)
+❌ Questions requiring deep knowledge not covered in session
+❌ Ambiguous phrasing with multiple interpretations
+
+## Flashcard Metadata
+
+Each flashcard includes:
+- **id**: Unique identifier
+- **front**: Question (1-2 sentences)
+- **back**: Answer (2-4 sentences)
+- **concept**: Tag for categorization
+- **difficulty**: 1-5 scale
+- **sourceFile**: Where concept appears in repo
+- **codeExample**: Optional snippet for reference
+
+## Integration with Spaced Repetition
+
+Output format is compatible with:
+- Anki import
+- SuperMemo XML
+- Custom SRS implementations
+
+Users can export flashcards for their preferred study system.

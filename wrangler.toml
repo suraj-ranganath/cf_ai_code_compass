@@ -1,0 +1,69 @@
+name = "cf-ai-repo-socratic-mentor"
+main = "workers/router.ts"
+compatibility_date = "2024-10-01"
+node_compat = true
+
+# Workers AI binding
+[ai]
+binding = "AI"
+
+# Vectorize binding for semantic search & embeddings
+[[vectorize]]
+binding = "VECTORIZE_INDEX"
+index_name = "socratic-mentor-embeddings"
+
+# Durable Object for session state & RTC
+[[durable_objects.bindings]]
+name = "DO_SESSIONS"
+class_name = "SessionDurableObject"
+script_name = "cf-ai-repo-socratic-mentor"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["SessionDurableObject"]
+
+# KV for user preferences & lightweight state
+[[kv_namespaces]]
+binding = "KV_PREFS"
+id = "" # Add your KV namespace ID after creation
+preview_id = "" # Add your preview KV namespace ID
+
+# R2 for optional caching of repo data
+[[r2_buckets]]
+binding = "R2_CACHE"
+bucket_name = "socratic-mentor-cache"
+preview_bucket_name = "socratic-mentor-cache-preview"
+
+# D1 (optional) for structured data / analytics
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "socratic-mentor-db"
+# database_id = "" # Add your D1 database ID
+
+# Environment variables
+[vars]
+ENVIRONMENT = "development"
+MAX_REPO_FILES = "100"
+QUIZ_QUESTIONS_COUNT = "5"
+STUDY_PLAN_DURATION_MINUTES = "15"
+
+# Secrets (set via wrangler secret put)
+# - GITHUB_TOKEN (for higher rate limits)
+# - OPENAI_API_KEY (if using external LLM)
+
+# Realtime API configuration
+[realtime]
+binding = "REALTIME"
+
+# Routes for Workers
+routes = [
+  { pattern = "socratic-mentor.example.com/*", zone_name = "example.com" }
+]
+
+# Development configuration
+[env.development]
+vars = { ENVIRONMENT = "development" }
+
+# Production configuration
+[env.production]
+vars = { ENVIRONMENT = "production" }
