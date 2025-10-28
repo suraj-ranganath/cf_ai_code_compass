@@ -56,6 +56,41 @@ app.post('/api/analyze', async (c) => {
       body: JSON.stringify({ analysis }),
     });
 
+    // Generate personalized welcome message using LLM
+    const welcomePrompt = `You are a Socratic mentor helping a developer learn a new codebase. 
+
+Repository: ${analysis.repoName}
+User's Goal: ${goal}
+Key Files Found: ${analysis.structure.slice(0, 5).map(f => f.path).join(', ')}
+Technologies: ${analysis.prerequisites.slice(0, 5).join(', ')}
+
+Generate a brief, engaging welcome message (2-3 sentences max) that:
+1. Acknowledges their specific goal
+2. Mentions 1-2 relevant files you found
+3. Asks an opening Socratic question related to their goal that invites exploration
+
+Be conversational, encouraging, and curious. Don't explain—ask.`;
+
+    const welcomeResponse = await c.env.AI.run(c.env.LLM_MODEL, {
+      messages: [
+        { role: 'system', content: 'You are a concise, Socratic teaching assistant. Generate brief, question-driven responses.' },
+        { role: 'user', content: welcomePrompt }
+      ],
+      max_tokens: 200,
+    }) as { response?: string };
+
+    const welcomeMessage = welcomeResponse.response || `I've analyzed **${analysis.repoName}** and found ${analysis.structure.length} key files. Let's explore how to ${goal}. What catches your attention first?`;
+
+    // Store welcome message in session
+    await doStub.fetch('http://internal/update', {
+      method: 'POST',
+      body: JSON.stringify({
+        messages: [
+          { role: 'assistant', content: welcomeMessage, timestamp: Date.now() }
+        ],
+      }),
+    });
+
     // Ingest repository into Vectorize for semantic search
     // Process in small batches (3 files at a time) to stay under subrequest limit
     // Recursively process all files in separate request contexts
@@ -94,6 +129,7 @@ app.post('/api/analyze', async (c) => {
     return c.json({
       sessionId,
       analysis,
+      welcomeMessage,
       message: 'Repository analyzed successfully. Ready for Socratic dialogue. (Repository is being indexed for semantic search in the background)',
     });
   } catch (error) {

@@ -12,10 +12,18 @@ interface Message {
   timestamp: number;
 }
 
+interface RepoInfo {
+  name: string;
+  url: string;
+  fileCount: number;
+  technologies: string[];
+}
+
 function App() {
   const [repoUrl, setRepoUrl] = useState('');
   const [goal, setGoal] = useState('');
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [repoInfo, setRepoInfo] = useState<RepoInfo | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -209,15 +217,22 @@ function App() {
       setSessionId(response.sessionId);
       setSuccessMessage('Repository analyzed successfully!');
       
-      // Add welcome message
-      setMessages([{
-        role: 'assistant',
-        content: `I've analyzed the repository **${response.analysis.repoName}**.\n\n` +
-          `I found ${response.analysis.structure.length} key files and identified ` +
-          `${response.analysis.prerequisites.length} prerequisite concepts.\n\n` +
-          `Let's start with a Socratic walk-through. ${useVoice ? 'You can speak or type your answers.' : 'Type your answers below.'}`,
-        timestamp: Date.now(),
-      }]);
+      // Store repo info for display
+      setRepoInfo({
+        name: response.analysis.repoName,
+        url: repoUrl,
+        fileCount: response.analysis.structure.length,
+        technologies: response.analysis.prerequisites.slice(0, 5),
+      });
+      
+      // Add LLM-generated welcome message
+      if (response.welcomeMessage) {
+        setMessages([{
+          role: 'assistant',
+          content: response.welcomeMessage,
+          timestamp: Date.now(),
+        }]);
+      }
     } catch (error) {
       setError('Failed to analyze repository: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
@@ -345,14 +360,50 @@ function App() {
       {/* Header */}
       <header className="header">
         <div className="header-content">
-          <h1>🎓 Socratic Mentor</h1>
+          <h1>🧠 Socratic Mentor</h1>
           {sessionId && (
-            <button 
-              className="status-indicator"
-              title={isConnected ? 'Voice streaming active' : 'Voice streaming inactive'}
-            >
-              <span className={`status-dot ${isConnected ? 'active' : ''}`}></span>
-            </button>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+              <button 
+                className="status-indicator"
+                title={isConnected ? 'Voice streaming active' : 'Voice streaming inactive'}
+              >
+                <span className={`status-dot ${isConnected ? 'active' : ''}`}></span>
+              </button>
+              <button
+                onClick={() => {
+                  if (confirm('Start a new learning session? Current progress will be lost.')) {
+                    setSessionId(null);
+                    setMessages([]);
+                    setRepoUrl('');
+                    setGoal('');
+                    if (websocket.current) {
+                      websocket.current.close();
+                    }
+                  }
+                }}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid var(--border)',
+                  borderRadius: '8px',
+                  padding: '0.5rem 1rem',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  fontSize: '0.875rem',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--primary)';
+                  e.currentTarget.style.color = 'var(--text-primary)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--border)';
+                  e.currentTarget.style.color = 'var(--text-secondary)';
+                }}
+                title="Start a new session"
+              >
+                ↻ New Session
+              </button>
+            </div>
           )}
         </div>
       </header>
@@ -367,10 +418,10 @@ function App() {
           {/* Welcome Section */}
           <div className="voice-control">
             <div className="voice-button" style={{ cursor: 'default', background: 'rgba(255, 255, 255, 0.15)' }}>
-              🎤
+              🧠
             </div>
-            <div className="voice-status">Voice-First Learning</div>
-            <div className="voice-hint">Learn any codebase through natural conversation</div>
+            <div className="voice-status">Learn Any Codebase Through Conversation</div>
+            <div className="voice-hint">Master unfamiliar repos with Socratic dialogue—voice or text</div>
           </div>
 
           {/* Start Form */}
@@ -466,6 +517,29 @@ function App() {
           {/* Error/Success Messages */}
           {error && <div className="error-message">⚠️ {error}</div>}
           {successMessage && <div className="success-message">✓ {successMessage}</div>}
+
+          {/* Repository Preview Card */}
+          {repoInfo && (
+            <div style={{
+              background: 'var(--bg-card)',
+              borderRadius: '12px',
+              padding: '1rem 1.5rem',
+              border: '1px solid var(--border)',
+              marginBottom: '1rem',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                <span style={{ fontSize: '1.5rem' }}>📦</span>
+                <div>
+                  <h3 style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text-primary)', margin: 0 }}>
+                    {repoInfo.name}
+                  </h3>
+                  <p style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)', margin: 0 }}>
+                    {repoInfo.fileCount} files analyzed • {repoInfo.technologies.slice(0, 3).join(', ')}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Voice Control */}
           {useVoice && (

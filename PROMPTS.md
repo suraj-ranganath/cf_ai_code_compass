@@ -1348,12 +1348,84 @@ useEffect(() => {
 
 ---
 
+## 2025-10-28T15:00:00.000Z - UI Polish & Prompt Improvements
+
+**Model**: GitHub Copilot (GPT-4 based)
+
+**User Prompt**:
+```
+- Make the title better and make the byline better. Look at the README for inspiration
+- Track all progress in PROMPTS.md
+- Show a preview of the repo at the top of the chat
+- Allow users to start a new session if it keeps loading
+- Make the initial message better - LLM generated based on user's goal, asking a question
+- Make the prompts better and more flexible while keeping the goal in mind
+Reference: https://www.llama.com/docs/how-to-guides/prompting/
+```
+
+**Actions Taken**:
+
+1. **Researched Llama Prompting Best Practices**:
+   - Reviewed official Meta Llama prompting guide
+   - Applied: role-based prompts, explicit restrictions, clear instructions, stylization
+   - Key insight: Be explicit about what NOT to do ("Never give direct answers", "Don't hallucinate")
+
+2. **Completely Rewrote System Prompt** (`prompts/system.socratic.txt`):
+   - **Before**: Rigid 6-phase workflow (Analysis → Prerequisites → Walk-Through → Struggle → Study → Flashcards)
+   - **After**: Flexible, goal-oriented approach that adapts dynamically
+   - Expanded from ~800 to ~1200 words with better organization
+   - Added explicit restrictions and success criteria
+   - Emphasized goal alignment in every interaction
+
+3. **Updated Frontend UI**:
+   - Changed title: 🎓 → 🧠 Socratic Mentor (brain emphasizes cognition)
+   - Better byline: "Learn Any Codebase Through Conversation"
+   - Added "New Session" button with confirmation dialog
+   - Implemented repo preview card showing: name, file count, tech stack
+
+4. **Implemented LLM-Generated Welcome Messages**:
+   - Backend generates personalized opening questions using Llama 3.3
+   - Prompt includes: repo name, user goal, key files, technologies
+   - LLM asked to acknowledge goal and ask opening Socratic question
+   - Fallback to static message if LLM fails
+
+5. **Deployed Updates**:
+   - Backend: v184875bc (484.68 KiB bundle)
+   - Frontend: https://218fa7fd.socratic-mentor.pages.dev
+
+**Code Changes**:
+```typescript
+// prompts/system.socratic.txt
+You are an expert software engineering mentor...
+
+## Core Principles
+1. Goal-Oriented Flexibility: Keep user's stated goal in focus
+2. Socratic Method: Never provide direct answers
+3. Code-Grounded Learning: Reference specific files
+4. Adaptive Difficulty: Adjust based on performance
+5. Metacognitive Development: Build transferable skills
+
+// workers/router.ts - LLM welcome
+const welcomeResponse = await c.env.AI.run(c.env.LLM_MODEL, {
+  messages: [{
+    role: 'system',
+    content: 'You are a concise, Socratic teaching assistant.'
+  }, {
+    role: 'user',
+    content: `Generate welcome message (2-3 sentences) that acknowledges goal and asks opening question...`
+  }],
+  max_tokens: 200
+});
+```
+
+**Outcome**:
+✅ Flexible Socratic teaching approach (vs rigid sequential phases)
+✅ Applied Llama prompting best practices from official guide
+✅ Better UX: repo preview card, new session button, improved title/byline
+✅ LLM generates personalized, goal-specific opening questions
+✅ Users have more control (can restart sessions easily)
+✅ More natural teaching flow that adapts to learner needs
+
+**Live Demo**: https://218fa7fd.socratic-mentor.pages.dev
+
 ---
-
-````
-
-````
-
-`````
-
-````

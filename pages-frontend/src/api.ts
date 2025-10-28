@@ -12,6 +12,7 @@ export interface AnalyzeResponse {
     primer: string;
     estimatedReadTime: number;
   };
+  welcomeMessage?: string;
   message: string;
 }
 
