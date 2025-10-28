@@ -373,13 +373,17 @@ Create exactly 5 flashcards. Mix difficulties: 1-2 easy, 2-3 medium, 0-1 hard.`;
 /**
  * Run the agent workflow with Workers AI
  * This uses Cloudflare's Agent SDK (if available) or direct AI calls
+ * Now captures reasoning steps for UI visualization
  */
 export async function runAgentWorkflow(
   session: SessionState,
   userMessage: string,
-  env: Env
+  env: Env,
+  onReasoningStep?: (step: any) => void
 ): Promise<ChatMessage> {
   try {
+    const reasoningSteps: any[] = [];
+
     // Build context about the repository for the AI
     const repoContext = session.analysis ? `
 Repository: ${session.analysis.repoName}
@@ -420,7 +424,36 @@ Ask questions that help the user understand the architecture, key components, an
         required: string[];
       },
       function: async (args: any) => {
+        // Capture tool invocation
+        const step = {
+          type: 'tool_call',
+          toolName: t.name,
+          description: `Calling ${t.name}`,
+          timestamp: Date.now(),
+          args,
+        };
+        reasoningSteps.push(step);
+        
+        if (onReasoningStep) {
+          onReasoningStep(step);
+        }
+
         const result = await t.handler(args, env);
+        
+        // Capture tool result
+        const resultStep = {
+          type: 'result',
+          toolName: t.name,
+          description: `Received result from ${t.name}`,
+          timestamp: Date.now(),
+          result: typeof result === 'string' ? result.substring(0, 200) : JSON.stringify(result).substring(0, 200),
+        };
+        reasoningSteps.push(resultStep);
+        
+        if (onReasoningStep) {
+          onReasoningStep(resultStep);
+        }
+
         // Convert result to string if it's an object
         return typeof result === 'string' ? result : JSON.stringify(result);
       },
@@ -439,6 +472,7 @@ Ask questions that help the user understand the architecture, key components, an
       role: 'assistant',
       content: response.response || response.content || response || 'I understand. Let me help you with that...',
       timestamp: Date.now(),
+      reasoningSteps,
     };
   } catch (error) {
     console.error('Error in agent workflow:', error);

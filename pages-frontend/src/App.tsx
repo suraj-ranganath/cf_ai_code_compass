@@ -3,11 +3,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { analyzeRepo, sendChat, transcribeAudio } from './api';
 import { VoiceRecorder } from './voice';
+import { ReasoningPanel, type ReasoningStep } from './components/ReasoningPanel';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+  reasoningSteps?: ReasoningStep[];
 }
 
 function App() {
@@ -26,6 +28,9 @@ function App() {
   const voiceRecorder = useRef<VoiceRecorder | null>(null);
   const websocket = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [showReasoning, setShowReasoning] = useState(false);
+  const [currentReasoning, setCurrentReasoning] = useState<ReasoningStep[]>([]);
+  const [activeMessageReasoning, setActiveMessageReasoning] = useState<{ [key: number]: ReasoningStep[] }>({});
 
   // Initialize voice recorder
   useEffect(() => {
@@ -68,6 +73,11 @@ function App() {
             setSuccessMessage(data.message);
             break;
 
+          case 'reasoning_step':
+            // Add reasoning step to current reasoning
+            setCurrentReasoning((prev) => [...prev, data.step]);
+            break;
+
           case 'transcription':
             // Show transcription
             setMessages((prev) => [...prev, {
@@ -78,12 +88,25 @@ function App() {
             break;
 
           case 'text_response':
-            // Add assistant response
+            // Add assistant response with reasoning steps
+            const messageIndex = messages.length;
             setMessages((prev) => [...prev, {
               role: 'assistant',
               content: data.message,
               timestamp: data.timestamp,
+              reasoningSteps: currentReasoning,
             }]);
+            
+            // Store reasoning for this message
+            if (currentReasoning.length > 0) {
+              setActiveMessageReasoning((prev) => ({
+                ...prev,
+                [messageIndex]: currentReasoning,
+              }));
+            }
+            
+            // Clear current reasoning for next message
+            setCurrentReasoning([]);
             setIsLoading(false);
             break;
 
@@ -144,6 +167,30 @@ function App() {
       return () => clearTimeout(timer);
     }
   }, [successMessage]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Toggle reasoning panel with 'R' key
+      if (e.key === 'r' || e.key === 'R') {
+        if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+          const target = e.target as HTMLElement;
+          // Don't trigger if typing in input
+          if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
+            e.preventDefault();
+            setShowReasoning((prev) => !prev);
+          }
+        }
+      }
+      // Close reasoning panel with Escape
+      if (e.key === 'Escape' && showReasoning) {
+        setShowReasoning(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [showReasoning]);
 
   // Handle repository analysis
   const handleAnalyze = async (e: React.FormEvent) => {
@@ -372,7 +419,21 @@ function App() {
             <div className="messages">
               {messages.map((msg, index) => (
                 <div key={index} className={`message message-${msg.role}`}>
-                  <div className="message-content">{msg.content}</div>
+                  <div className="message-content">
+                    {msg.content}
+                    {msg.role === 'assistant' && msg.reasoningSteps && msg.reasoningSteps.length > 0 && (
+                      <button 
+                        className="reasoning-toggle-btn"
+                        onClick={() => {
+                          setActiveMessageReasoning({ [index]: msg.reasoningSteps! });
+                          setShowReasoning(true);
+                        }}
+                        title="Show AI reasoning"
+                      >
+                        🧠 Show reasoning
+                      </button>
+                    )}
+                  </div>
                   <div className="message-time">
                     {new Date(msg.timestamp).toLocaleTimeString()}
                   </div>
@@ -380,8 +441,23 @@ function App() {
               ))}
               {isLoading && (
                 <div className="message message-assistant">
-                  <div className="message-content typing-indicator">
-                    <span></span><span></span><span></span>
+                  <div className="message-content">
+                    <div className="thinking-indicator">
+                      <div className="thinking-dots">
+                        <span className="thinking-dot"></span>
+                        <span className="thinking-dot"></span>
+                        <span className="thinking-dot"></span>
+                      </div>
+                      {currentReasoning.length > 0 && (
+                        <button 
+                          className="reasoning-toggle-btn"
+                          onClick={() => setShowReasoning(true)}
+                          title="Show AI reasoning"
+                        >
+                          🧠 View reasoning
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -429,6 +505,13 @@ function App() {
       <footer className="footer">
         <p>Built with ❤️ on Cloudflare Edge | <a href="https://github.com/suraj-ranganath/cf_ai_repo_socratic_mentor" target="_blank" rel="noopener noreferrer">View on GitHub</a></p>
       </footer>
+
+      {/* Reasoning Panel */}
+      <ReasoningPanel
+        steps={showReasoning ? (Object.values(activeMessageReasoning)[0] || currentReasoning) : []}
+        isOpen={showReasoning}
+        onClose={() => setShowReasoning(false)}
+      />
     </div>
   );
 }

@@ -60,6 +60,15 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
   audioUrl?: string; // For voice messages
+  reasoningSteps?: ReasoningStep[]; // Tool calls and reasoning
+}
+
+export interface ReasoningStep {
+  type: 'tool_call' | 'thinking' | 'result';
+  toolName?: string;
+  description: string;
+  timestamp: number;
+  result?: any;
 }
 
 export interface SocraticQuestion {

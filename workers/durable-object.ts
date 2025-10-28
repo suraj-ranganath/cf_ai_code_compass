@@ -267,7 +267,18 @@ export class SessionDurableObject {
 
       // Run agent workflow to get intelligent response
       console.log('Running agent workflow for message:', message);
-      const agentResponse = await runAgentWorkflow(session, message, this.env);
+      const agentResponse = await runAgentWorkflow(
+        session,
+        message,
+        this.env,
+        // Stream reasoning steps as they happen
+        (step) => {
+          socket.send(JSON.stringify({
+            type: 'reasoning_step',
+            step,
+          }));
+        }
+      );
       console.log('Agent response received:', agentResponse);
 
       session.messages.push(agentResponse);

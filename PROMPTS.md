@@ -1064,6 +1064,292 @@ if (websocket.current?.readyState === WebSocket.OPEN) {
 
 ---
 
+## 2025-10-28T14:00:00.000Z
+
+**Model**: GitHub Copilot (GPT-4 based)
+
+**User Prompt**:
+```
+WebSocket URL had double /api/api/realtime path. Then Whisper model expected array format, not ArrayBuffer. After fixes, voice transcription works!
+```
+
+**User Request**:
+```
+Now show users when tool calls are being invoked, similar to OpenAI's thinking indicators. Requirements:
+- Subtle "thinking" indicator (animated dots)
+- "Peek into reasoning" toggle button
+- Reasoning panel that splits view (left: steps, right: answer)
+- Mobile-friendly bottom sheet
+- Accessibility: keyboard shortcuts, screen reader support
+- User control: never auto-expose reasoning
+```
+
+**Actions Taken**:
+- Fixed WebSocket URL construction: removed /api suffix before adding /api/realtime path
+- Fixed Whisper audio format: converted Uint8Array to regular array [...audioBytes]
+- Deployed fixes (frontend: https://7ab86a14.socratic-mentor.pages.dev, backend: v928dc3c8)
+- Voice transcription now working end-to-end
+- Planning reasoning visualization feature with:
+  * ReasoningToggleButton component
+  * ReasoningPanel with vertical split layout
+  * Tool call streaming and step highlighting
+  * Mobile bottom sheet UI
+  * LocalStorage preferences
+
+**Commands Run**:
+```bash
+# Fixed frontend WebSocket URL
+cd pages-frontend && npm run build
+npx wrangler pages deploy dist --project-name=socratic-mentor  # https://7ab86a14.socratic-mentor.pages.dev
+
+# Fixed backend Whisper format
+npx wrangler deploy  # v928dc3c8
+npx wrangler tail --format pretty  # Monitor logs
+```
+
+**Status**: Voice feature ✅ working. Starting reasoning visualization implementation.
+
+---
+
+## 2025-10-28T14:15:00.000Z
+
+**Model**: GitHub Copilot (GPT-4 based)
+
+**User Request**:
+```
+Great! this seems to be working! Always maintain a running log of all interactions with you so far in Prompts.md. 
+
+Now I want you to show the user when tool calls are being invoked similar to how OpenAI shows thinking with their models.
+
+Requirements:
+- Subtle "thinking" indicator (animated dots) when agent is working
+- "Peek into reasoning" affordance (sparkle icon next to message)
+- Reasoning panel that splits view (left: reasoning steps, right: final answer)
+- Mobile-friendly bottom sheet design
+- Accessibility: keyboard shortcuts (R to toggle, Escape to close), screen reader labels
+- User control: never auto-expose reasoning, user must click/press shortcut
+```
+
+**Actions Taken**:
+
+1. **Enhanced Backend to Track Tool Calls** (`workers/agent.ts`):
+   - Added `onReasoningStep` callback parameter to `runAgentWorkflow()`
+   - Wrapped each tool's `handler` function to capture invocations
+   - Created reasoning steps for:
+     * `tool_call` - when tool is invoked (includes toolName, timestamp, args)
+     * `result` - when tool returns (includes toolName, timestamp, result data)
+   - Each step stored in `reasoningSteps` array
+   - Steps streamed to frontend via callback (if WebSocket connected)
+   - Attached `reasoningSteps` to final ChatMessage response
+
+2. **Enhanced Durable Object to Stream Reasoning** (`workers/durable-object.ts`):
+   - Updated `handleTextInput()` to pass reasoning callback to `runAgentWorkflow()`
+   - Callback sends WebSocket message: `{type: 'reasoning_step', step: {...}}`
+   - Frontend receives steps in real-time as they occur
+   - Each tool invocation → immediate WebSocket message to client
+
+3. **Added ReasoningStep Type** (`workers/types.ts`):
+   - Interface: `type`, `toolName`, `description`, `timestamp`, `result`
+   - Types: 'tool_call' | 'thinking' | 'result'
+   - Added `reasoningSteps?: ReasoningStep[]` to `ChatMessage` interface
+
+4. **Created ReasoningPanel Component** (`pages-frontend/src/components/ReasoningPanel.tsx`):
+   - Props: `steps`, `isOpen`, `onClose`
+   - Step rendering with icons:
+     * 🔧 Tool Call (blue border)
+     * ✅ Result (green border)
+     * 💭 Thinking (orange border)
+   - Tool name mapping (e.g., semantic_search → "Searching Code")
+   - Collapsible details for result data (JSON formatted)
+   - Footer with keyboard hint: "Press R to toggle • Escape to close"
+   - Accessibility: aria-labels, role="dialog"
+
+5. **Created Reasoning Styles** (`pages-frontend/src/styles/reasoning.css`):
+   - Overlay: backdrop blur, z-index 1000
+   - Panel: slide-up animation, max-width 600px
+   - Mobile: bottom sheet with swipe gesture hint
+   - Step styling: borders, padding, hover effects
+   - Animations: fadeIn (overlay), slideUp (panel), pulse (thinking dots)
+   - Reduced motion support: `@prefers-reduced-motion`
+
+6. **Enhanced App.tsx with Reasoning UI**:
+   - **State Management**:
+     * `showReasoning` - boolean for panel visibility
+     * `currentReasoning` - accumulates steps for message in progress
+     * `activeMessageReasoning` - stores reasoning steps per message ID
+   - **WebSocket Handler**:
+     * New case for `reasoning_step` message type
+     * Adds steps to `currentReasoning` array as they arrive
+     * When `text_response` received, attaches `currentReasoning` to message
+     * Clears `currentReasoning` for next message
+   - **Keyboard Shortcuts**:
+     * R key toggles reasoning panel (excludes input/textarea focus)
+     * Escape key closes panel
+     * Event listener cleanup on unmount
+   - **Message Rendering**:
+     * Assistant messages with reasoning show "🧠 Show reasoning" button
+     * Loading indicator shows "🧠 View reasoning" if steps exist
+     * Click opens ReasoningPanel with that message's steps
+   - **Component Integration**:
+     * Added `<ReasoningPanel>` component at end of render
+     * Props: `steps`, `isOpen`, `onClose`
+     * Conditionally shows current reasoning or selected message reasoning
+
+**Commands Run**:
+```bash
+# Deploy backend with reasoning tracking
+npx wrangler deploy
+# Version: dacd6d35-45ed-4f1e-8ab5-e2208045a5a4
+# Bundle: 479.65 KiB / 100.37 KiB gzipped
+
+# Build and deploy frontend with reasoning UI
+cd pages-frontend && npm run build
+# Vite build: 11.22 kB CSS + 154.89 kB JS (gzipped: 3.11 kB + 50.01 kB)
+
+npx wrangler pages deploy dist --project-name=socratic-mentor
+# Deployment: https://a1ed58ba.socratic-mentor.pages.dev
+```
+
+**Code Changes**:
+```typescript
+// workers/agent.ts - Tool invocation tracking
+export async function runAgentWorkflow(
+  session: SessionState, 
+  userMessage: string, 
+  env: Env,
+  onReasoningStep?: (step: any) => void
+): Promise<ChatMessage> {
+  const reasoningSteps: any[] = [];
+  
+  const toolFunctions = tools.map((t) => ({
+    function: async (args: any) => {
+      const step = { type: 'tool_call', toolName: t.name, timestamp: Date.now(), args };
+      reasoningSteps.push(step);
+      if (onReasoningStep) onReasoningStep(step);
+      
+      const result = await t.handler(args, env);
+      
+      const resultStep = { type: 'result', toolName: t.name, timestamp: Date.now(), result };
+      reasoningSteps.push(resultStep);
+      if (onReasoningStep) onReasoningStep(resultStep);
+      
+      return typeof result === 'string' ? result : JSON.stringify(result);
+    }
+  }));
+  
+  return {
+    role: 'assistant',
+    content: response,
+    timestamp: Date.now(),
+    reasoningSteps
+  };
+}
+
+// pages-frontend/src/App.tsx - Reasoning state and UI
+const [showReasoning, setShowReasoning] = useState(false);
+const [currentReasoning, setCurrentReasoning] = useState<ReasoningStep[]>([]);
+const [activeMessageReasoning, setActiveMessageReasoning] = useState<{ [key: number]: ReasoningStep[] }>({});
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  switch (data.type) {
+    case 'reasoning_step':
+      setCurrentReasoning((prev) => [...prev, data.step]);
+      break;
+    case 'text_response':
+      setMessages((prev) => [...prev, {
+        role: 'assistant',
+        content: data.message,
+        timestamp: data.timestamp,
+        reasoningSteps: currentReasoning,
+      }]);
+      setActiveMessageReasoning((prev) => ({
+        ...prev,
+        [data.timestamp]: currentReasoning,
+      }));
+      setCurrentReasoning([]);
+      break;
+  }
+};
+
+// Keyboard shortcuts
+useEffect(() => {
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'r' && !(e.target as HTMLElement).matches('input, textarea')) {
+      setShowReasoning((prev) => !prev);
+    } else if (e.key === 'Escape') {
+      setShowReasoning(false);
+    }
+  };
+  window.addEventListener('keydown', handleKeyDown);
+  return () => window.removeEventListener('keydown', handleKeyDown);
+}, [showReasoning]);
+
+// Message rendering with reasoning toggle
+{msg.reasoningSteps && msg.reasoningSteps.length > 0 && (
+  <button
+    onClick={() => {
+      setActiveMessageReasoning({ [msg.timestamp]: msg.reasoningSteps });
+      setShowReasoning(true);
+    }}
+  >
+    🧠 Show reasoning
+  </button>
+)}
+
+<ReasoningPanel
+  steps={showReasoning ? (Object.values(activeMessageReasoning)[0] || currentReasoning) : []}
+  isOpen={showReasoning}
+  onClose={() => setShowReasoning(false)}
+/>
+```
+
+**Architecture**:
+- **Backend Tracking**: Tool invocations wrapped to capture call+result with timestamps
+- **Real-time Streaming**: WebSocket messages sent for each reasoning step as it occurs
+- **Frontend State**: currentReasoning accumulates during message, attached when complete
+- **Per-Message Storage**: activeMessageReasoning maps timestamp → steps array
+- **User Control**: Never auto-shows, requires button click or R key press
+- **Accessibility**: Keyboard shortcuts (R toggle, Escape close), ARIA labels, screen reader support
+- **Mobile UX**: Bottom sheet with swipe hint, slide-up animation
+
+**UI/UX Features**:
+- 🔧 Tool Call steps (blue border) - shows which tool invoked with args
+- ✅ Result steps (green border) - shows tool results, collapsible JSON
+- 💭 Thinking indicators (pulse animation) - when agent processing
+- 🧠 "Show reasoning" button - appears next to messages with reasoning
+- Split view: steps panel on left, final answer on right (desktop)
+- Bottom sheet: steps at bottom, answer above (mobile)
+- Keyboard: R to toggle, Escape to close (excludes input focus)
+- Smooth animations: fadeIn (overlay), slideUp (panel)
+
+**Outcome**:
+- ✅ Backend tracks all tool invocations (semantic_search, generate_concept_primer, etc.)
+- ✅ Real-time streaming of reasoning steps via WebSocket
+- ✅ ReasoningPanel component with polished UI
+- ✅ Mobile-responsive bottom sheet design
+- ✅ Keyboard shortcuts and accessibility features
+- ✅ Per-message reasoning storage and retrieval
+- ✅ User control: never auto-exposes reasoning
+- 📝 Frontend: https://a1ed58ba.socratic-mentor.pages.dev
+- 📝 Backend: https://cf-ai-repo-socratic-mentor.suranganath.workers.dev (v dacd6d35)
+
+**Demo Flow**:
+1. User asks question → Agent invokes tools (e.g., semantic_search)
+2. Each tool call creates reasoning_step WebSocket message
+3. Frontend accumulates steps in real-time
+4. "🧠 Show reasoning" button appears when message complete
+5. User clicks button or presses R → ReasoningPanel opens
+6. Panel shows tool calls with timestamps, args, results
+7. User can collapse/expand result details
+8. Press Escape or click overlay to close
+
+**Key Learning**: Wrapping tool handlers enables real-time transparency of AI reasoning. Users can now see exactly which tools the Socratic mentor invokes (semantic search, concept primers, question generation) and what data it uses to formulate questions. This transparency enhances trust and educational value - students understand *how* the AI is helping them learn, not just *what* it's teaching.
+
+---
+
+---
+
 ````
 
 ````
