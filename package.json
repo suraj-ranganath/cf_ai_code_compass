@@ -5,12 +5,19 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "dev:remote": "wrangler dev --remote",
+    "build": "tsc --noEmit && npm run build:frontend",
     "build:frontend": "cd pages-frontend && npm run build",
-    "deploy:frontend": "wrangler pages deploy pages-frontend/dist",
+    "deploy": "wrangler deploy",
+    "deploy:frontend": "wrangler pages deploy pages-frontend/dist --project-name=socratic-mentor",
     "start": "wrangler dev",
     "tail": "wrangler tail",
-    "test": "vitest"
+    "test": "vitest",
+    "lint": "eslint workers pages-frontend/src --ext .ts,.tsx",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,css}\"",
+    "setup": "node scripts/setup.js",
+    "gif": "echo 'GIF generation placeholder - add screenshot tool if needed'"
   },
   "keywords": [
     "cloudflare",
@@ -25,15 +32,18 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@cloudflare/ai": "^1.0.0",
-    "@cloudflare/workers-types": "^4.20240821.1",
-    "hono": "^4.5.0"
+    "@cloudflare/workers-types": "^4.20241011.0",
+    "hono": "^4.6.3"
   },
   "devDependencies": {
     "@types/node": "^20.14.10",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.3.3",
     "typescript": "^5.5.3",
     "vitest": "^1.6.0",
-    "wrangler": "^3.72.0"
+    "wrangler": "^3.78.0"
   },
   "engines": {
     "node": ">=18.0.0"

@@ -34,26 +34,21 @@ binding = "R2_CACHE"
 bucket_name = "socratic-mentor-cache"
 preview_bucket_name = "socratic-mentor-cache-preview"
 
-# D1 (optional) for structured data / analytics
-# [[d1_databases]]
-# binding = "DB"
-# database_name = "socratic-mentor-db"
-# database_id = "" # Add your D1 database ID
-
 # Environment variables
 [vars]
 ENVIRONMENT = "development"
 MAX_REPO_FILES = "100"
-QUIZ_QUESTIONS_COUNT = "5"
+QUIZ_QUESTIONS_COUNT = "6"
 STUDY_PLAN_DURATION_MINUTES = "15"
+LLM_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+EMBEDDING_MODEL = "@cf/baai/bge-base-en-v1.5"
 
 # Secrets (set via wrangler secret put)
 # - GITHUB_TOKEN (for higher rate limits)
-# - OPENAI_API_KEY (if using external LLM)
 
-# Realtime API configuration
-[realtime]
-binding = "REALTIME"
+# Observability
+[observability]
+enabled = true
 
 # Routes for Workers
 routes = [
