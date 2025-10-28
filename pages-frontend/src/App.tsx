@@ -20,6 +20,8 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [useVoice, setUseVoice] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const voiceRecorder = useRef<VoiceRecorder | null>(null);
 
@@ -35,20 +37,37 @@ function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Auto-dismiss messages
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => setSuccessMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage]);
+
   // Handle repository analysis
   const handleAnalyze = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!repoUrl || !goal) {
-      alert('Please enter both repository URL and your goal');
+      setError('Please enter both repository URL and your goal');
       return;
     }
 
     setIsAnalyzing(true);
+    setError(null);
 
     try {
       const response = await analyzeRepo(repoUrl, goal);
       setSessionId(response.sessionId);
+      setSuccessMessage('Repository analyzed successfully!');
       
       // Add welcome message
       setMessages([{
@@ -60,7 +79,7 @@ function App() {
         timestamp: Date.now(),
       }]);
     } catch (error) {
-      alert('Failed to analyze repository: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      setError('Failed to analyze repository: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsAnalyzing(false);
     }
@@ -81,6 +100,7 @@ function App() {
     setMessages((prev) => [...prev, userMessage]);
     setInputMessage('');
     setIsLoading(true);
+    setError(null);
 
     try {
       const response = await sendChat(sessionId, inputMessage);
@@ -91,7 +111,7 @@ function App() {
         timestamp: response.response.timestamp,
       }]);
     } catch (error) {
-      alert('Failed to send message: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      setError('Failed to send message: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsLoading(false);
     }
@@ -110,13 +130,19 @@ function App() {
       // For now, show placeholder
       setMessages((prev) => [...prev, {
         role: 'user',
-        content: '[Voice message sent]',
+        content: '[Voice message sent - transcription pending]',
         timestamp: Date.now(),
       }]);
+
+      setSuccessMessage('Voice recorded successfully');
     } else {
       // Start recording
-      await voiceRecorder.current.start();
-      setIsRecording(true);
+      try {
+        await voiceRecorder.current.start();
+        setIsRecording(true);
+      } catch (error) {
+        setError('Failed to access microphone: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      }
     }
   };
 
@@ -128,6 +154,28 @@ function App() {
       </header>
 
       <main className="main">
+        {/* Error Message */}
+        {error && (
+          <div className="error-message">
+            {error}
+          </div>
+        )}
+
+        {/* Success Message */}
+        {successMessage && (
+          <div className="success-message">
+            {successMessage}
+          </div>
+        )}
+
+        {/* Loading Overlay */}
+        {isAnalyzing && (
+          <div className="loading-overlay">
+            <div className="loading-spinner"></div>
+            <div className="loading-text">Analyzing repository...</div>
+          </div>
+        )}
+
         {!sessionId ? (
           <div className="start-screen">
             <div className="card">
@@ -170,8 +218,8 @@ function App() {
                   </label>
                 </div>
 
-                <button type="submit" className="btn btn-primary" disabled={isAnalyzing}>
-                  {isAnalyzing ? 'Analyzing Repository...' : 'Start Learning'}
+                <button type="submit" className={`btn btn-primary ${isAnalyzing ? 'btn-loading' : ''}`} disabled={isAnalyzing}>
+                  {isAnalyzing ? 'Analyzing...' : 'Start Learning'}
                 </button>
               </form>
             </div>
@@ -215,6 +263,7 @@ function App() {
                       onClick={handleVoiceToggle}
                       className={`btn btn-voice ${isRecording ? 'recording' : ''}`}
                       disabled={isLoading}
+                      title={isRecording ? 'Stop recording' : 'Start voice recording'}
                     >
                       {isRecording ? '⏹️ Stop' : '🎤 Voice'}
                     </button>
@@ -222,10 +271,10 @@ function App() {
                   
                   <button
                     type="submit"
-                    className="btn btn-send"
+                    className={`btn btn-send ${isLoading ? 'btn-loading' : ''}`}
                     disabled={isLoading || !inputMessage.trim()}
                   >
-                    Send
+                    {isLoading ? '' : 'Send'}
                   </button>
                 </div>
               </form>
@@ -235,7 +284,7 @@ function App() {
       </main>
 
       <footer className="footer">
-        <p>Built with ❤️ on Cloudflare Edge</p>
+        <p>Built with ❤️ on Cloudflare Edge | <a href="https://github.com/suraj-ranganath/cf_ai_repo_socratic_mentor" target="_blank" rel="noopener noreferrer">View on GitHub</a></p>
       </footer>
     </div>
   );

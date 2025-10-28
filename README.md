@@ -289,24 +289,260 @@ curl https://your-worker.your-subdomain.workers.dev/health
 
 ### API Endpoints
 
-- `POST /api/analyze`: Analyze a GitHub repo
-- `POST /api/chat`: Send chat message (text or voice)
-- `GET /api/session/:id`: Retrieve session state
-- `POST /api/flashcards`: Generate flashcards
-- `GET /api/health`: Health check
+#### `GET /health`
+Health check endpoint.
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "timestamp": 1698547200000,
+  "environment": "production"
+}
+```
+
+#### `POST /api/analyze`
+Analyze a GitHub repository and create a new session.
+
+**Request Body:**
+```json
+{
+  "repoUrl": "https://github.com/owner/repo",
+  "goal": "Understand the authentication flow",
+  "depth": 2
+}
+```
+
+**Response:**
+```json
+{
+  "sessionId": "uuid-v4",
+  "analysis": {
+    "name": "owner/repo",
+    "files": [...],
+    "hotspots": [...],
+    "prerequisites": [...]
+  },
+  "message": "Repository analyzed successfully"
+}
+```
+
+#### `POST /api/ingest?repo=<url>`
+Ingest a repository into Vectorize for semantic search.
+
+**Query Parameters:**
+- `repo`: Full GitHub repository URL
+
+**Response:**
+```json
+{
+  "message": "Repository ingested successfully",
+  "stats": {
+    "filesProcessed": 45,
+    "chunksStored": 328,
+    "filesSkipped": 5,
+    "totalSize": 2457600
+  }
+}
+```
+
+#### `POST /api/primer`
+Generate a concept primer for a repository.
+
+**Request Body:**
+```json
+{
+  "sessionId": "uuid-v4",
+  "repoUrl": "https://github.com/owner/repo",
+  "goal": "Learn how to contribute",
+  "userExperience": "Intermediate"
+}
+```
+
+**Response:**
+```json
+{
+  "primer": "# Repository Primer: owner/repo\n\n## Overview...",
+  "estimatedReadTime": 8
+}
+```
+
+#### `POST /api/chat`
+Send a chat message (text or voice) to the agent.
+
+**Request Body:**
+```json
+{
+  "sessionId": "uuid-v4",
+  "message": "What is the purpose of the router module?",
+  "isVoice": false
+}
+```
+
+**Response:**
+```json
+{
+  "response": {
+    "role": "assistant",
+    "content": "Great question! Before I explain...",
+    "timestamp": 1698547300000
+  },
+  "sessionId": "uuid-v4"
+}
+```
+
+#### `GET /api/session/:id`
+Retrieve the current state of a session.
+
+**Response:**
+```json
+{
+  "id": "uuid-v4",
+  "repoUrl": "https://github.com/owner/repo",
+  "goal": "Understand auth flow",
+  "messages": [...],
+  "userStruggles": ["JWT tokens", "middleware pattern"],
+  "createdAt": 1698547000000,
+  "lastActivityAt": 1698547300000
+}
+```
+
+#### `POST /api/plan`
+Generate a personalized study plan with flashcards.
+
+**Request Body:**
+```json
+{
+  "sessionId": "uuid-v4"
+}
+```
+
+**Response:**
+```json
+{
+  "studyPlan": {
+    "plan": [
+      {
+        "activity": "Read JWT documentation",
+        "estimatedMinutes": 5,
+        "resources": ["auth/jwt.ts", "https://jwt.io/introduction"],
+        "objective": "Understand token structure"
+      }
+    ],
+    "totalMinutes": 15,
+    "focusAreas": ["JWT tokens", "middleware pattern"]
+  },
+  "flashcards": [...]
+}
+```
+
+#### `POST /api/flashcards`
+Generate flashcards based on user struggles.
+
+**Request Body:**
+```json
+{
+  "sessionId": "uuid-v4"
+}
+```
+
+**Response:**
+```json
+{
+  "flashcards": [
+    {
+      "front": "In auth/middleware.ts, what does verifyToken() return if the JWT signature is invalid?",
+      "back": "It returns null and logs an error, allowing the calling code to handle authentication failure gracefully.",
+      "concept": "JWT Validation",
+      "difficulty": 3,
+      "sourceFile": "auth/middleware.ts",
+      "codeExample": "if (!verifyToken(token)) { return unauthorized(); }"
+    }
+  ]
+}
+```
+
+#### `GET /api/search?q=<query>&repo=<name>&topK=<n>`
+Perform semantic search over ingested repositories.
+
+**Query Parameters:**
+- `q`: Search query (required)
+- `repo`: Filter by repository name (optional)
+- `topK`: Number of results (default: 5)
+
+**Response:**
+```json
+{
+  "results": [
+    {
+      "id": "owner/repo:src/auth.ts:chunk0",
+      "score": 0.89,
+      "metadata": {
+        "filePath": "src/auth.ts",
+        "language": "typescript",
+        "contentPreview": "export function authenticate..."
+      }
+    }
+  ]
+}
+```
+
+#### `GET /api/realtime/:sessionId`
+Upgrade to WebSocket for real-time voice/text streaming.
+
+**WebSocket Messages:**
+
+Send (Client → Server):
+```json
+{
+  "type": "text",
+  "message": "How does authentication work?"
+}
+```
+
+Receive (Server → Client):
+```json
+{
+  "type": "text_response",
+  "message": "Let me guide you through that...",
+  "timestamp": 1698547400000
+}
+```
 
 ### Example cURL Commands
 
 ```bash
+# Health check
+curl https://your-worker.workers.dev/health
+
 # Analyze a repo
 curl -X POST https://your-worker.workers.dev/api/analyze \
   -H "Content-Type: application/json" \
   -d '{"repoUrl": "https://github.com/cloudflare/workers-sdk", "goal": "Understand auth flow"}'
 
+# Ingest repo into Vectorize
+curl -X POST "https://your-worker.workers.dev/api/ingest?repo=https://github.com/owner/repo"
+
+# Generate primer
+curl -X POST https://your-worker.workers.dev/api/primer \
+  -H "Content-Type: application/json" \
+  -d '{"repoUrl": "https://github.com/cloudflare/workers-sdk", "goal": "Learn to contribute"}'
+
 # Chat (text)
 curl -X POST https://your-worker.workers.dev/api/chat \
   -H "Content-Type: application/json" \
   -d '{"sessionId": "abc123", "message": "What is the role of the API client?"}'
+
+# Get session state
+curl https://your-worker.workers.dev/api/session/abc123
+
+# Generate study plan
+curl -X POST https://your-worker.workers.dev/api/plan \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId": "abc123"}'
+
+# Semantic search
+curl "https://your-worker.workers.dev/api/search?q=authentication&repo=owner/repo&topK=3"
 ```
 
 ---
