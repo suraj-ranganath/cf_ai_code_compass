@@ -4,7 +4,8 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { Env, RepoAnalysisRequest, ChatMessage } from './types';
 import { analyzeRepository } from './github';
-import { runAgentWorkflow } from './agent';
+import { runAgentWorkflow, generateFlashcards, generateStudyPlan, tools } from './agent';
+import { ingestRepository, semanticSearch } from './vectorize';
 import { SessionDurableObject } from './durable-object';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -151,19 +152,176 @@ app.post('/api/flashcards', async (c) => {
     const session = await sessionResponse.json();
 
     // Generate flashcards based on struggles
-    const flashcards = await generateFlashcards(session, c.env);
+    const flashcardResults = await generateFlashcards(
+      session.userStruggles || [],
+      session.repoUrl || 'unknown',
+      c.env
+    );
 
     // Update session with flashcards
     await doStub.fetch('http://internal/update', {
       method: 'POST',
-      body: JSON.stringify({ flashcards }),
+      body: JSON.stringify({ flashcards: flashcardResults }),
     });
 
-    return c.json({ flashcards });
+    return c.json({ flashcards: flashcardResults });
   } catch (error) {
     console.error('Error generating flashcards:', error);
     return c.json({
       error: 'Failed to generate flashcards',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    }, 500);
+  }
+});
+
+// Generate study plan
+app.post('/api/plan', async (c) => {
+  try {
+    const body = await c.req.json<{ sessionId: string }>();
+    const { sessionId } = body;
+
+    if (!sessionId) {
+      return c.json({ error: 'sessionId is required' }, 400);
+    }
+
+    // Get session state
+    const doId = c.env.DO_SESSIONS.idFromName(sessionId);
+    const doStub = c.env.DO_SESSIONS.get(doId);
+    const sessionResponse = await doStub.fetch('http://internal/state');
+    const session = await sessionResponse.json();
+
+    // Generate study plan and flashcards
+    const studyPlan = await generateStudyPlan(session, c.env);
+    const flashcards = await generateFlashcards(
+      session.userStruggles || [],
+      session.repoUrl || 'unknown',
+      c.env
+    );
+
+    // Update session
+    await doStub.fetch('http://internal/update', {
+      method: 'POST',
+      body: JSON.stringify({ studyPlan, flashcards }),
+    });
+
+    return c.json({ studyPlan, flashcards });
+  } catch (error) {
+    console.error('Error generating study plan:', error);
+    return c.json({
+      error: 'Failed to generate study plan',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    }, 500);
+  }
+});
+
+// Ingest repository into Vectorize
+app.post('/api/ingest', async (c) => {
+  try {
+    const repoUrl = c.req.query('repo');
+
+    if (!repoUrl) {
+      return c.json({ error: 'repo query parameter is required' }, 400);
+    }
+
+    // Trigger ingestion
+    const result = await ingestRepository(repoUrl, c.env);
+
+    if (!result.success) {
+      return c.json({
+        error: 'Ingestion failed',
+        details: result.error,
+      }, 500);
+    }
+
+    return c.json({
+      message: 'Repository ingested successfully',
+      stats: result.stats,
+    });
+  } catch (error) {
+    console.error('Error ingesting repository:', error);
+    return c.json({
+      error: 'Failed to ingest repository',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    }, 500);
+  }
+});
+
+// Generate concept primer
+app.post('/api/primer', async (c) => {
+  try {
+    const body = await c.req.json<{
+      sessionId?: string;
+      repoUrl?: string;
+      goal?: string;
+      userExperience?: string;
+    }>();
+
+    let repoAnalysis;
+
+    if (body.sessionId) {
+      // Get analysis from session
+      const doId = c.env.DO_SESSIONS.idFromName(body.sessionId);
+      const doStub = c.env.DO_SESSIONS.get(doId);
+      const sessionResponse = await doStub.fetch('http://internal/state');
+      const session = await sessionResponse.json();
+      repoAnalysis = session.analysis;
+    } else if (body.repoUrl) {
+      // Analyze repository on the fly
+      repoAnalysis = await analyzeRepository(body.repoUrl, 2, c.env);
+    } else {
+      return c.json({ error: 'sessionId or repoUrl is required' }, 400);
+    }
+
+    if (!repoAnalysis) {
+      return c.json({ error: 'No repository analysis available' }, 400);
+    }
+
+    // Generate primer using the tool
+    const primerTool = tools.find((t) => t.name === 'generate_concept_primer');
+    if (!primerTool) {
+      return c.json({ error: 'Primer tool not available' }, 500);
+    }
+
+    const primerResult = await primerTool.handler(
+      {
+        repoAnalysis,
+        userGoal: body.goal || 'Understand the repository',
+        userExperience: body.userExperience || 'Intermediate',
+      },
+      c.env
+    );
+
+    return c.json(primerResult);
+  } catch (error) {
+    console.error('Error generating primer:', error);
+    return c.json({
+      error: 'Failed to generate primer',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    }, 500);
+  }
+});
+
+// Semantic search endpoint
+app.get('/api/search', async (c) => {
+  try {
+    const query = c.req.query('q');
+    const repoName = c.req.query('repo');
+    const topK = parseInt(c.req.query('topK') || '5', 10);
+
+    if (!query) {
+      return c.json({ error: 'q query parameter is required' }, 400);
+    }
+
+    const results = await semanticSearch(query, c.env, {
+      topK,
+      ...(repoName && { filter: { repoName } }),
+    });
+
+    return c.json({ results });
+  } catch (error) {
+    console.error('Error performing search:', error);
+    return c.json({
+      error: 'Failed to perform search',
       details: error instanceof Error ? error.message : 'Unknown error',
     }, 500);
   }
@@ -184,12 +342,6 @@ app.get('/api/realtime/:sessionId', async (c) => {
 
   return doStub.fetch(c.req.raw);
 });
-
-// Stub for flashcard generation (will be implemented with agent.ts)
-async function generateFlashcards(session: any, env: Env) {
-  // TODO: Implement flashcard generation using Workers AI
-  return [];
-}
 
 // Export Durable Object class
 export { SessionDurableObject };
