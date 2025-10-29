@@ -12,15 +12,20 @@ You need to configure the following secrets in your GitHub repository:
 
 1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com/profile/api-tokens)
 2. Click "Create Token"
-3. Use the "Edit Cloudflare Workers" template OR create a custom token with:
-   - **Permissions:**
-     - Account > Workers Scripts > Edit
-     - Account > Workers KV Storage > Edit
-     - Account > Cloudflare Pages > Edit
-     - Account > Account Settings > Read
-   - **Account Resources:** Include your account
-   - **Zone Resources:** All zones (or specific zone if you have custom domains)
-4. Copy the generated token
+3. **IMPORTANT:** Start with "Edit Cloudflare Workers" template, then add these additional permissions:
+   - **Account Permissions:**
+     - Workers Scripts > Edit ✅
+     - Workers KV Storage > Edit ✅ **CRITICAL!**
+     - Cloudflare Pages > Edit ✅
+     - Account Settings > Read ✅
+     - Workers Tail > Read (optional, for logs)
+   - **User Permissions:**
+     - User Details > Read ✅ (Required to avoid "Unable to retrieve email" warning)
+   - **Account Resources:** Include > [Your Account Name]
+   - **Zone Resources:** All zones
+4. Click "Continue to summary"
+5. Click "Create Token"
+6. **Copy the token immediately** (you won't be able to see it again!)
 
 **Add to GitHub:**
 1. Go to your repository → Settings → Secrets and variables → Actions
@@ -103,6 +108,39 @@ npx wrangler pages deploy pages-frontend/dist --project-name=socratic-mentor
 ```
 
 ## Troubleshooting
+
+### "Error: kv bindings require kv write perms [code: 10023]"
+
+This is the most common error! Your token is missing **Workers KV Storage > Edit** permission.
+
+**Fix:**
+1. Go to [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens)
+2. Find your token and click "Edit"
+3. Add: **Account > Workers KV Storage > Edit** ⚠️
+4. Save changes
+5. Re-run the workflow in GitHub Actions
+
+**Why:** This project uses KV to store user preferences, so deployment requires KV write permissions.
+
+### "Error: Authentication error [code: 10000]"
+
+This means your API token doesn't have the required permissions.
+
+**Fix:**
+1. Go to [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens)
+2. Find your token and click "Edit" (or create a new one)
+3. Ensure it has these permissions:
+   - ✅ Account > Workers Scripts > Edit
+   - ✅ Account > Cloudflare Pages > Edit
+   - ✅ Account > Account Settings > Read
+   - ✅ User > User Details > Read (prevents "Unable to retrieve email" warning)
+4. **Account Resources** must include your account
+5. Save changes
+6. If you created a new token, update `CLOUDFLARE_API_TOKEN` secret in GitHub
+
+### "Unable to retrieve email for this user"
+
+This warning appears when the token is missing `User > User Details > Read` permission. While it doesn't block deployment, it's better to add this permission for cleaner logs.
 
 ### "Error: Authentication error"
 - Check that `CLOUDFLARE_API_TOKEN` is set correctly
