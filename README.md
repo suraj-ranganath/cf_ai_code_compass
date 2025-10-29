@@ -6,15 +6,23 @@
 [![Live Demo](https://img.shields.io/badge/demo-live-success)](https://code-compass.pages.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-**[🚀 Live Demo](https://code-compass.pages.dev)** | **[📖 View Prompts](./PROMPTS.md)**
+**[🚀 Live Demo](https://code-compass.pages.dev)**
 
 An intelligent mentor that helps developers master unfamiliar codebases through conversation, not documentation. Paste a GitHub repository URL, describe your learning goal, and Code Compass guides you through the codebase using Socratic questions, semantic code search, and personalized study plans.
 
+Traditional documentation is passive - you read and hope you understand. Code Compass is active:
+
+1. **Forces Deep Thinking**: You can't passively consume answers
+2. **Reveals Knowledge Gaps**: The AI identifies exactly what you don't understand
+3. **Personalized Paths**: Study plans adapt to your specific struggles
+4. **Spaced Repetition**: Flashcards reinforce concepts over time
+5. **Transfer Learning**: Questions build metacognitive skills that apply to any codebase
+
 ---
 
-## ✨ Why This Project Stands Out
+## Project highlights
 
-Built entirely on Cloudflare's edge platform as a submission for the Cloudflare AI internship program, this project demonstrates:
+Built on Cloudflare's AI Agents platform, this project demonstrates:
 
 - **Full-stack AI orchestration** with Workers AI (Llama 3.3), Vectorize, Durable Objects, and KV
 - **Real-time voice streaming** using WebSocket connections and Whisper transcription
@@ -41,16 +49,7 @@ Built entirely on Cloudflare's edge platform as a submission for the Cloudflare 
 
 ---
 
-## 🎯 Key Features
-
-### Assignment Requirements Met
-
-✅ **LLM Integration**: Llama 3.3 with configurable models for different tasks  
-✅ **Workflow Coordination**: Cloudflare Agents orchestrate 7 specialized tools  
-✅ **Voice Input**: WebSocket-based voice streaming with Whisper transcription  
-✅ **Memory & State**: Vectorize for semantic memory + Durable Objects for sessions  
-
-### Core Capabilities
+## Core Capabilities
 
 - **🎤 Voice-First UX**: Speak your questions and receive text responses in real-time
 - **🔍 Semantic Code Search**: Vector similarity search finds relevant code across repositories
@@ -59,10 +58,17 @@ Built entirely on Cloudflare's edge platform as a submission for the Cloudflare 
 - **🌐 Real-time Collaboration**: WebSocket connections maintain conversation state
 - **📊 Repository Analysis**: Automatic extraction of structure, hotspots, and prerequisites
 
+## 🎯 Checks
+
+✅ **LLM Integration**: Llama 3.3 with configurable models for different tasks  
+✅ **Workflow Coordination**: Cloudflare Agents orchestrate 7 specialized tools  
+✅ **Voice Input**: WebSocket-based RTC voice streaming with Whisper transcription  
+✅ **Memory & State**: Vectorize for semantic memory + Durable Objects for sessions  
+
 ---
 
 ## 🚀 Quick Start
-
+Prefer to try it right away? Launch the live demo - no setup required: 🧞 [Live Demo - code-compass.pages.dev](https://code-compass.pages.dev)
 ### Prerequisites
 
 - Node.js 18+ and npm
@@ -150,35 +156,35 @@ Would you like me to generate flashcards to reinforce these concepts?"
 ---
 
 ## 📐 Architecture
+```mermaid
+flowchart TB
+    subgraph Edge[Cloudflare Edge]
+        User[User (Browser)]
+        Pages[Pages\n(Frontend)]
+        Router[Workers\n(Hono Router)]
+        Agent[agent.ts]
+        GithubTS[github.ts]
+        VectorizeTS[vectorize]
+        WorkersAI[Workers AI\n(LLM)]
+        GitHubAPI[GitHub API]
+        VectorizeAPI[Vectorize\n(768-dim)]
+        Durable[Durable Objects\n(Sessions)]
+        KV[KV Store\n(Prefs)]
+    end
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                  Cloudflare Edge                        │
-│                                                         │
-│  ┌──────────┐         ┌──────────────────┐            │
-│  │  Pages   │◄────────┤ User (Browser)   │            │
-│  │(Frontend)│ WebRTC  └──────────────────┘            │
-│  └────┬─────┘                                          │
-│       │ HTTP/WebSocket                                 │
-│       ▼                                                 │
-│  ┌──────────────────────────────────────────┐         │
-│  │      Workers (Hono Router)               │         │
-│  │  ┌─────────┐  ┌─────────┐  ┌──────────┐ │         │
-│  │  │agent.ts │  │github.ts│  │vectorize│ │         │
-│  │  └────┬────┘  └────┬────┘  └────┬─────┘ │         │
-│  └───────┼────────────┼────────────┼────────┘         │
-│          │            │            │                   │
-│     ┌────▼────┐  ┌───▼────┐  ┌───▼──────┐           │
-│     │Workers  │  │ GitHub │  │Vectorize │           │
-│     │AI (LLM) │  │  API   │  │(768-dim) │           │
-│     └─────────┘  └────────┘  └──────────┘           │
-│                                                         │
-│  ┌──────────────┐  ┌────────┐                         │
-│  │   Durable    │  │   KV   │                         │
-│  │   Objects    │  │ Store  │                         │
-│  │  (Sessions)  │  │(Prefs) │                         │
-│  └──────────────┘  └────────┘                         │
-└─────────────────────────────────────────────────────────┘
+    User -- WebRTC / HTTP / WS --> Pages
+    Pages --> Router
+
+    Router --> Agent
+    Router --> GithubTS
+    Router --> VectorizeTS
+
+    Agent --> WorkersAI
+    GithubTS --> GitHubAPI
+    VectorizeTS --> VectorizeAPI
+
+    Router --> Durable
+    Router --> KV
 ```
 
 ### Data Flow
@@ -494,28 +500,6 @@ This ensures learning is concrete, not abstract.
 
 ---
 
-## 🏆 What Makes This Special
-
-### Technical Achievements
-
-- **Semantic Code Search at Scale**: Chunks and embeds entire repositories, enabling vector similarity search across thousands of files
-- **Real-time Voice Pipeline**: WebSocket → Base64 audio → Whisper transcription → Agent response, all under 2 seconds
-- **Intelligent Tool Orchestration**: 7 specialized tools (repo analysis, semantic search, primer generation, quiz creation, study plans, flashcards, embeddings) coordinated via Cloudflare Agents
-- **Struggle Detection Heuristics**: Automatically identifies when users are confused by analyzing message patterns and keywords
-- **Production-Grade Error Handling**: Graceful degradation, fallbacks, retry logic, and comprehensive logging
-
-### Educational Impact
-
-Traditional documentation is passive - you read and hope you understand. Code Compass is active:
-
-1. **Forces Deep Thinking**: You can't passively consume answers
-2. **Reveals Knowledge Gaps**: The AI identifies exactly what you don't understand
-3. **Personalized Paths**: Study plans adapt to your specific struggles
-4. **Spaced Repetition**: Flashcards reinforce concepts over time
-5. **Transfer Learning**: Questions build metacognitive skills that apply to any codebase
-
----
-
 ## 🛠️ Troubleshooting
 
 ### "No Vectorize index found"
@@ -552,31 +536,9 @@ npx wrangler tail --format pretty
 
 ---
 
-## 📊 Performance Metrics
-
-- **Repository Analysis**: 2-5 seconds for repos with <100 files
-- **Semantic Search**: <500ms per query (vector search + relevance ranking)
-- **Voice Transcription**: <1 second for 10-second audio clips
-- **LLM Response Time**: 2-4 seconds (including tool calls)
-- **WebSocket Latency**: <100ms round-trip
-- **Global Edge Deployment**: ~300 data centers worldwide
-
----
-
-## 🔒 Security & Privacy
-
-- ✅ **No data persistence**: Repository content never stored permanently
-- ✅ **Ephemeral sessions**: Auto-deleted after 24 hours of inactivity
-- ✅ **Secure secrets**: GitHub tokens stored as Worker secrets, never exposed
-- ✅ **Rate limiting**: Prevents abuse via Cloudflare's built-in protection
-- ✅ **HTTPS only**: All connections encrypted with TLS 1.3
-- ✅ **Content Security Policy**: XSS protection on frontend
-
----
-
 ## 🚀 Future Enhancements
 
-- [ ] **Text-to-Speech**: Speak responses aloud using Workers AI TTS models
+- [ ] **Realtime Text-to-Speech**: Speak responses aloud using Workers AI TTS models in Real-time
 - [ ] **Code Diff Explanations**: Analyze pull requests and explain changes
 - [ ] **Multi-repo Learning**: Compare patterns across multiple codebases
 - [ ] **Collaborative Sessions**: Multiple users learning together in real-time
@@ -605,18 +567,8 @@ Built with:
 
 Inspired by Socrates, the ancient Greek philosopher who taught through questions, not answers.
 
----
-
-## 👨‍💻 About
-
-Created by **Suraj Ranganath** as part of the Cloudflare AI Internship application.
-
-- **GitHub**: [suraj-ranganath](https://github.com/suraj-ranganath)
-- **LinkedIn**: [suraj-ranganath](https://www.linkedin.com/in/suraj-ranganath/)
-- **Repository**: [cf_ai_code_compass](https://github.com/suraj-ranganath/cf_ai_code_compass)
-
 **Prompt Log**: All AI-assisted development prompts documented in [PROMPTS.md](./PROMPTS.md) (3000+ lines).
 
 ---
 
-**Built with ❤️ on the Cloudflare Edge**
+**Built with ❤️ on the Cloudflare AI Agents Platform**

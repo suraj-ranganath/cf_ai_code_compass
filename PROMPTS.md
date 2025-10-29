@@ -1,12 +1,11 @@
 # AI Prompts Log
 
-This document maintains a running log of all AI interactions during the development of this project, as required by the Cloudflare AI assignment submission guidelines.
-
+This document maintains a running log of all AI interactions during the development of this project.
 ---
 
 ## 2025-10-28T00:00:00.000Z
 
-**Model**: GitHub Copilot (GPT-4 based)
+**Model**: GitHub Copilot (Claude-4.5 based)
 
 **User Prompt**:
 ```
@@ -335,7 +334,7 @@ Docs (Go through all relevant pages here when required): https://developers.clou
 
 ## 2025-10-28T01:00:00.000Z - Full Implementation Session
 
-**Model**: GitHub Copilot (GPT-4 based)
+**Model**: GitHub Copilot (Claude-4.5 based)
 
 **User Prompt**:
 ```
@@ -682,7 +681,7 @@ Implement the full app so it's presentable and live
 
 ## 2025-10-28T02:00:00.000Z - Final Polish Session
 
-**Model**: GitHub Copilot (GPT-4 based)
+**Model**: GitHub Copilot (Claude-4.5 based)
 
 **User Prompt**:
 ```
@@ -773,7 +772,7 @@ Continue working on the todos
 
 ## 2025-10-28T18:00:00.000Z - Deployment & Bug Fixes Session
 
-**Model**: GitHub Copilot (GPT-4 based)
+**Model**: GitHub Copilot (Claude-4.5 based)
 
 **User Prompt**:
 ```
@@ -913,7 +912,7 @@ Continue working on the todos
 
 ## 2025-01-28T06:00:00.000Z
 
-**Model**: GitHub Copilot (GPT-4 based)
+**Model**: GitHub Copilot (Claude-4.5 based)
 
 **User Prompt**:
 ```
@@ -964,7 +963,7 @@ c.executionCtx.waitUntil(
 
 ## 2025-10-28T13:30:00.000Z
 
-**Model**: GitHub Copilot (GPT-4 based)
+**Model**: GitHub Copilot (Claude-4.5 based)
 
 **User Prompt**:
 ```
@@ -1066,7 +1065,7 @@ if (websocket.current?.readyState === WebSocket.OPEN) {
 
 ## 2025-10-28T14:00:00.000Z
 
-**Model**: GitHub Copilot (GPT-4 based)
+**Model**: GitHub Copilot (Claude-4.5 based)
 
 **User Prompt**:
 ```
@@ -1113,7 +1112,7 @@ npx wrangler tail --format pretty  # Monitor logs
 
 ## 2025-10-28T14:15:00.000Z
 
-**Model**: GitHub Copilot (GPT-4 based)
+**Model**: GitHub Copilot (Claude-4.5 based)
 
 **User Request**:
 ```
@@ -1350,7 +1349,7 @@ useEffect(() => {
 
 ## 2025-10-28T15:00:00.000Z - UI Polish & Prompt Improvements
 
-**Model**: GitHub Copilot (GPT-4 based)
+**Model**: GitHub Copilot (Claude-4.5 based)
 
 **User Prompt**:
 ```
@@ -1432,7 +1431,7 @@ const welcomeResponse = await c.env.AI.run(c.env.LLM_MODEL, {
 
 ## 2025-10-28T20:00:00.000Z - Tool Calling & UI Bug Fixes
 
-**Model**: GitHub Copilot (GPT-4 based)
+**Model**: GitHub Copilot (Claude-4.5 based)
 
 **User Requests**:
 1. "Tool invocations working but reasoning panel needs cleanup"
@@ -1530,7 +1529,7 @@ npx wrangler pages deploy dist --project-name=socratic-mentor
 
 ## 2025-10-28T21:00:00.000Z - CI/CD Setup & Type Check Fixes
 
-**Model**: GitHub Copilot (GPT-4 based)
+**Model**: GitHub Copilot (Claude-4.5 based)
 
 **User Requests**:
 1. "Footer must be there on homepage too"
@@ -1854,7 +1853,7 @@ curl ".../api/session/SESSION_ID"
 - **8 sessions logged** from October 28, 2025
 - Each entry includes:
   - ISO timestamp
-  - Model name: "GitHub Copilot (GPT-4 based)"
+  - Model name: "GitHub Copilot (Claude-4.5 based)"
   - Full user prompts (verbatim)
   - Detailed actions taken (bullet lists)
   - Code changes with snippets
@@ -2334,7 +2333,7 @@ curl https://cf-ai-repo-socratic-mentor.suranganath.workers.dev/health
 
 ---
 
-**Audit Completed By**: GitHub Copilot (GPT-4 based)  
+**Audit Completed By**: GitHub Copilot (Claude-4.5 based)  
 **Sign-off**: All rubric requirements verified and documented.
 
 
@@ -2342,7 +2341,7 @@ curl https://cf-ai-repo-socratic-mentor.suranganath.workers.dev/health
 
 ## 2025-10-28T21:30:00.000Z - Final Comprehensive Verification Pass
 
-**Model**: GitHub Copilot (GPT-4 based)
+**Model**: GitHub Copilot (Claude-4.5 based)
 
 **User Prompt**:
 ```
@@ -2438,7 +2437,7 @@ curl https://cf-ai-repo-socratic-mentor.suranganath.workers.dev/health
 
 ## 2025-10-28T22:00:00.000Z - Project Rename & Documentation Cleanup
 
-**Model**: GitHub Copilot (GPT-4 based)
+**Model**: GitHub Copilot (Claude-4.5 based)
 
 **User Prompt**:
 ```
