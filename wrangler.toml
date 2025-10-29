@@ -1,4 +1,4 @@
-name = "cf-ai-repo-socratic-mentor"
+name = "cf-ai-code-compass"
 main = "workers/router.ts"
 compatibility_date = "2024-10-01"
 node_compat = true
@@ -10,13 +10,13 @@ binding = "AI"
 # Vectorize binding for semantic search & embeddings
 [[vectorize]]
 binding = "VECTORIZE_INDEX"
-index_name = "socratic-mentor-embeddings"
+index_name = "code-compass-embeddings"
 
 # Durable Object for session state & RTC
 [[durable_objects.bindings]]
 name = "DO_SESSIONS"
 class_name = "SessionDurableObject"
-script_name = "cf-ai-repo-socratic-mentor"
+script_name = "cf-ai-code-compass"
 
 [[migrations]]
 tag = "v1"
@@ -28,12 +28,12 @@ binding = "KV_PREFS"
 id = "e9ecc35250ee4a3a893b4a25f30412a3"
 preview_id = "5a40327a43db4937a347ac263b57d508"
 
-# R2 for optional caching of repo data (optional - enable R2 in dashboard first)
-# To enable: Go to Cloudflare Dashboard → R2 → Enable R2
-# Then run: npx wrangler r2 bucket create socratic-mentor-cache
+# R2 bucket for caching large repositories (optional)
+# Uncomment after creating: npx wrangler r2 bucket create code-compass-cache
+# Then run: npx wrangler r2 bucket create code-compass-cache
 # [[r2_buckets]]
 # binding = "R2_CACHE"
-# bucket_name = "socratic-mentor-cache"
+# bucket_name = "code-compass-cache"
 
 # Environment variables
 [vars]

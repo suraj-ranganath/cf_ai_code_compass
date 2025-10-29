@@ -569,7 +569,7 @@ function App() {
             </p>
             <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center', alignItems: 'center' }}>
               <a
-                href="https://github.com/suraj-ranganath/cf_ai_repo_socratic_mentor"
+                href="https://github.com/suraj-ranganath/cf_ai_code_compass"
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{
@@ -765,7 +765,7 @@ function App() {
             </p>
             <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center', alignItems: 'center' }}>
               <a
-                href="https://github.com/suraj-ranganath/cf_ai_repo_socratic_mentor"
+                href="https://github.com/suraj-ranganath/cf_ai_code_compass"
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{

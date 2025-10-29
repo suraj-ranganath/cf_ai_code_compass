@@ -87,7 +87,7 @@ jobs:
         working-directory: ./pages-frontend
         run: npm run build
         env:
-          VITE_API_URL: https://cf-ai-repo-socratic-mentor.suranganath.workers.dev/api
+          VITE_API_URL: https://cf-ai-code-compass.suranganath.workers.dev/api
       
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3

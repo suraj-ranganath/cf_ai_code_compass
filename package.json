@@ -1,5 +1,5 @@
 {
-  "name": "cf_ai_repo_socratic_mentor",
+  "name": "cf_ai_code_compass",
   "version": "1.0.0",
   "description": "Voice-first Socratic agent for GitHub repo onboarding powered by Cloudflare AI",
   "type": "module",
@@ -9,7 +9,7 @@
     "build": "tsc --noEmit && npm run build:frontend",
     "build:frontend": "cd pages-frontend && npm run build",
     "deploy": "wrangler deploy",
-    "deploy:frontend": "wrangler pages deploy pages-frontend/dist --project-name=socratic-mentor",
+    "deploy:frontend": "wrangler pages deploy pages-frontend/dist --project-name=code-compass",
     "start": "wrangler dev",
     "tail": "wrangler tail",
     "test": "vitest",
