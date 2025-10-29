@@ -94,4 +94,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy pages-frontend/dist --project-name=socratic-mentor --branch=main
+          command: pages deploy pages-frontend/dist --project-name=code-compass --branch=main
