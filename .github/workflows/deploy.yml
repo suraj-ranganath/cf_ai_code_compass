@@ -19,17 +19,22 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
       
       - name: Install dependencies
         run: npm ci
       
-      - name: Run ESLint
-        run: npm run lint || true
+      - name: Type check Workers
+        run: npx tsc --noEmit
       
-      - name: Type check
-        run: npx tsc --noEmit || true
+      - name: Install frontend dependencies
+        working-directory: ./pages-frontend
+        run: npm ci
+      
+      - name: Type check Frontend
+        working-directory: ./pages-frontend
+        run: npx tsc --noEmit
 
   deploy-workers:
     name: Deploy Workers
@@ -43,7 +48,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
       
       - name: Install dependencies
@@ -61,6 +66,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint
     if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      deployments: write
     
     steps:
       - uses: actions/checkout@v4
@@ -68,17 +76,18 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
       
-      - name: Install root dependencies
+      - name: Install frontend dependencies
+        working-directory: ./pages-frontend
         run: npm ci
       
-      - name: Install frontend dependencies
-        run: cd pages-frontend && npm ci
-      
       - name: Build frontend
-        run: cd pages-frontend && npm run build
+        working-directory: ./pages-frontend
+        run: npm run build
+        env:
+          VITE_API_URL: https://cf-ai-repo-socratic-mentor.suranganath.workers.dev/api
       
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
