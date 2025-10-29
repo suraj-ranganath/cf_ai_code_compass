@@ -158,21 +158,21 @@ Would you like me to generate flashcards to reinforce these concepts?"
 ## 📐 Architecture
 ```mermaid
 flowchart TB
-    subgraph Edge[Cloudflare Edge]
-        User[User (Browser)]
-        Pages[Pages\n(Frontend)]
-        Router[Workers\n(Hono Router)]
-        Agent[agent.ts]
-        GithubTS[github.ts]
-        VectorizeTS[vectorize]
-        WorkersAI[Workers AI\n(LLM)]
-        GitHubAPI[GitHub API]
-        VectorizeAPI[Vectorize\n(768-dim)]
-        Durable[Durable Objects\n(Sessions)]
-        KV[KV Store\n(Prefs)]
+    subgraph Edge["Cloudflare Edge"]
+        User["User Browser"]
+        Pages["Pages<br/>(Frontend)"]
+        Router["Workers<br/>(Hono Router)"]
+        Agent["agent.ts"]
+        GithubTS["github.ts"]
+        VectorizeTS["vectorize.ts"]
+        WorkersAI["Workers AI<br/>(LLM)"]
+        GitHubAPI["GitHub API"]
+        VectorizeAPI["Vectorize<br/>(768-dim)"]
+        Durable["Durable Objects<br/>(Sessions)"]
+        KV["KV Store<br/>(Prefs)"]
     end
 
-    User -- WebRTC / HTTP / WS --> Pages
+    User -->|"WebRTC/HTTP/WS"| Pages
     Pages --> Router
 
     Router --> Agent
