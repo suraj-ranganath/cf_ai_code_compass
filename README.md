@@ -4,9 +4,15 @@
 [![AI Powered](https://img.shields.io/badge/AI-Llama%203.3-blue)](https://developers.cloudflare.com/workers-ai/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
+> **🚀 [Live Demo](https://code-compass.pages.dev)** | **📖 [Documentation](#documentation)**
+
 > **⚠️ This README is a living document and is continually updated throughout development.**
 
 An AI-powered guide that helps developers master unfamiliar GitHub repositories through conversation. Paste a repo URL, describe your goals, and CodeCompass will guide you through the codebase using Socratic dialogue, actual code examples, and personalized learning paths.
+
+**Production URLs:**
+- **Frontend**: https://code-compass.pages.dev
+- **Backend API**: https://cf-ai-repo-socratic-mentor.suranganath.workers.dev
 
 ---
 
