@@ -100,10 +100,10 @@ Be conversational, encouraging, and curious. Don't explain—ask.`;
         let totalFiles = 0;
         let totalChunks = 0;
         
-        // Process all files in batches
+        // Process all files in batches - only 1 file per batch to avoid subrequest limits
         while (true) {
           try {
-            const result = await ingestRepository(repoUrl, c.env, startIndex, 3);
+            const result = await ingestRepository(repoUrl, c.env, startIndex, 1);
             totalFiles += result.stats.filesProcessed;
             totalChunks += result.stats.chunksStored;
             
@@ -117,7 +117,7 @@ Be conversational, encouraging, and curious. Don't explain—ask.`;
             startIndex = result.nextIndex;
             
             // Small delay between batches to avoid overwhelming
-            await new Promise(resolve => setTimeout(resolve, 200));
+            await new Promise(resolve => setTimeout(resolve, 500));
           } catch (error) {
             console.error(`Batch ingestion failed at index ${startIndex}:`, error);
             break;
@@ -346,7 +346,7 @@ app.post('/api/ingest', async (c) => {
   try {
     const repoUrl = c.req.query('repo');
     const startIndex = parseInt(c.req.query('start') || '0', 10);
-    const batchSize = parseInt(c.req.query('batch') || '3', 10);
+    const batchSize = parseInt(c.req.query('batch') || '1', 10); // Default to 1 file per batch
 
     if (!repoUrl) {
       return c.json({ error: 'repo query parameter is required' }, 400);

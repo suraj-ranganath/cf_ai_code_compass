@@ -38,11 +38,15 @@ export const ReasoningPanel: React.FC<ReasoningPanelProps> = ({ steps, isOpen, o
     if (!toolName) return 'Processing';
     
     const names: { [key: string]: string } = {
-      'semantic_search': 'Searching Code',
-      'generate_concept_primer': 'Building Concept Primer',
-      'generate_socratic_question': 'Creating Question',
-      'repo_map': 'Analyzing Repository',
-      'embed_text': 'Embedding Content',
+      'search_code': 'Searching codebase',
+      'semantic_search': 'Searching codebase',
+      'generate_concept_primer': 'Creating learning material',
+      'generate_socratic_question': 'Crafting question',
+      'analyze_repository_structure': 'Analyzing repository',
+      'repo_map': 'Analyzing repository',
+      'embed_text': 'Processing content',
+      'generate_study_plan': 'Building study plan',
+      'generate_flashcards': 'Creating flashcards',
     };
     
     return names[toolName] || toolName.replace(/_/g, ' ');

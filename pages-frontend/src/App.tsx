@@ -107,7 +107,7 @@ function App() {
             break;
 
           case 'text_response':
-            // Add assistant response (no reasoning steps shown)
+            // Add assistant response
             setMessages((prev) => [...prev, {
               role: 'assistant' as const,
               content: data.message,
@@ -360,7 +360,10 @@ function App() {
       {/* Header */}
       <header className="header">
         <div className="header-content">
-          <h1>🧠 Socratic Mentor</h1>
+          <h1>
+            <span style={{ marginRight: '0.5rem' }}>🧭</span>
+            Code Compass
+          </h1>
           {sessionId && (
             <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
               <button 
@@ -473,20 +476,47 @@ function App() {
                 />
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', background: 'var(--bg-elevated)', borderRadius: '12px', marginBottom: '1.5rem' }}>
-                <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', flex: 1 }}>
-                  <input
-                    type="checkbox"
-                    checked={useVoice}
-                    onChange={(e) => setUseVoice(e.target.checked)}
-                    style={{ marginRight: '0.75rem' }}
-                  />
-                  <span style={{ fontSize: '1.25rem', marginRight: '0.5rem' }}>🎤</span>
-                  <span style={{ color: 'var(--text-primary)', fontWeight: '500' }}>
-                    Enable Voice Mode
-                  </span>
-                </label>
-              </div>
+              {/* Advanced Settings - Collapsible */}
+              <details style={{ marginBottom: '1.5rem' }}>
+                <summary style={{ 
+                  cursor: 'pointer', 
+                  padding: '0.75rem 1rem',
+                  background: 'var(--bg-elevated)',
+                  borderRadius: '8px',
+                  color: 'var(--text-secondary)',
+                  fontSize: '0.875rem',
+                  fontWeight: '500',
+                  userSelect: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                }}>
+                  <span>⚙️</span>
+                  Additional Settings
+                </summary>
+                <div style={{ 
+                  marginTop: '1rem',
+                  padding: '1rem', 
+                  background: 'var(--bg-elevated)', 
+                  borderRadius: '12px',
+                }}>
+                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={useVoice}
+                      onChange={(e) => setUseVoice(e.target.checked)}
+                      style={{ marginRight: '0.75rem' }}
+                    />
+                    <span style={{ fontSize: '1.25rem', marginRight: '0.5rem' }}>🎤</span>
+                    <span style={{ color: 'var(--text-primary)', fontWeight: '500' }}>
+                      Enable Voice Mode
+                    </span>
+                  </label>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '0.5rem', marginLeft: '2.5rem' }}>
+                    Use voice input and output for a conversational learning experience
+                  </p>
+                </div>
+              </details>
 
               <button 
                 type="submit" 
@@ -520,25 +550,43 @@ function App() {
 
           {/* Repository Preview Card */}
           {repoInfo && (
-            <div style={{
-              background: 'var(--bg-card)',
-              borderRadius: '12px',
-              padding: '1rem 1.5rem',
-              border: '1px solid var(--border)',
-              marginBottom: '1rem',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+            <a 
+              href={repoInfo.url} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              style={{
+                background: 'var(--bg-card)',
+                borderRadius: '12px',
+                padding: '1rem 1.5rem',
+                border: '1px solid var(--border)',
+                marginBottom: '1rem',
+                display: 'block',
+                textDecoration: 'none',
+                transition: 'all 0.2s',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = 'var(--primary)';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = 'var(--border)';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 <span style={{ fontSize: '1.5rem' }}>📦</span>
-                <div>
+                <div style={{ flex: 1 }}>
                   <h3 style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text-primary)', margin: 0 }}>
                     {repoInfo.name}
                   </h3>
                   <p style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)', margin: 0 }}>
-                    {repoInfo.fileCount} files analyzed • {repoInfo.technologies.slice(0, 3).join(', ')}
+                    {repoInfo.fileCount} files analyzed • {repoInfo.technologies.slice(0, 3).map((t: any) => typeof t === 'string' ? t : t.concept || t.name).filter(Boolean).join(', ')}
                   </p>
                 </div>
+                <span style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>↗</span>
               </div>
-            </div>
+            </a>
           )}
 
           {/* Voice Control */}
@@ -625,6 +673,70 @@ function App() {
               </button>
             </form>
           </div>
+          
+          {/* Footer */}
+          <footer style={{
+            padding: '2rem 1rem',
+            textAlign: 'center',
+            borderTop: '1px solid var(--border-color)',
+            marginTop: '2rem',
+            color: 'var(--text-secondary)',
+            fontSize: '0.875rem',
+          }}>
+            <p style={{ marginBottom: '0.75rem' }}>
+              Made with ❤️ using{' '}
+              <a 
+                href="https://developers.cloudflare.com/workers-ai/" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{ 
+                  color: 'var(--primary-color)', 
+                  textDecoration: 'none',
+                  fontWeight: '500',
+                }}
+              >
+                Cloudflare AI
+              </a>
+            </p>
+            <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center', alignItems: 'center' }}>
+              <a
+                href="https://github.com/suraj-ranganath/cf_ai_repo_socratic_mentor"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  color: 'var(--text-secondary)',
+                  textDecoration: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  transition: 'color 0.2s ease',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary-color)'}
+                onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
+              >
+                <span>GitHub</span>
+                <span>↗</span>
+              </a>
+              <a
+                href="https://www.linkedin.com/in/suraj-ranganath/"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  color: 'var(--text-secondary)',
+                  textDecoration: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  transition: 'color 0.2s ease',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary-color)'}
+                onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
+              >
+                <span>LinkedIn</span>
+                <span>↗</span>
+              </a>
+            </div>
+          </footer>
         </main>
       )}
     </div>

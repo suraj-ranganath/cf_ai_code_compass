@@ -393,14 +393,14 @@ export async function analyzeRepository(
  * Tool definition for Cloudflare Agents - repo_map
  */
 export const repoMapTool = {
-  name: 'repo_map',
-  description: 'Fetch GitHub repository structure, prioritize key files, identify hotspots and prerequisites',
+  name: 'analyze_repository_structure',
+  description: 'Analyze a GitHub repository to understand its file structure, identify important files, and detect key technologies. Use this FIRST when starting to work with a new repository. Returns: file paths, important files (entry points, configs), and detected technologies/frameworks.',
   parameters: {
     type: 'object',
     properties: {
       repo_url: {
         type: 'string',
-        description: 'The GitHub repository URL to analyze',
+        description: 'The full GitHub repository URL (e.g., https://github.com/facebook/react)',
       },
     },
     required: ['repo_url'],
@@ -409,10 +409,21 @@ export const repoMapTool = {
     const analysis = await analyzeRepository(params.repo_url, 2, env);
     
     return {
-      modules: analysis.structure.map(f => f.path),
-      hot_paths: analysis.hotspots.map(h => h.file),
-      gotchas: analysis.prerequisites.map(p => `${p.concept}: ${p.description}`),
-      symbols: analysis.hotspots.flatMap(h => h.concepts),
+      repository_name: analysis.repoName,
+      total_files: analysis.structure.length,
+      file_structure: analysis.structure.slice(0, 50).map(f => `${f.path} (${f.language || 'unknown'}, importance: ${f.importance?.toFixed(2)})`),
+      important_files: analysis.hotspots.map(h => ({
+        path: h.file,
+        description: h.description,
+        importance: h.importance,
+        key_concepts: h.concepts,
+      })),
+      technologies_found: analysis.prerequisites.map(p => ({
+        name: p.concept,
+        description: p.description,
+        difficulty: p.difficulty,
+      })),
+      estimated_read_time: analysis.estimatedReadTime,
     };
   },
 };

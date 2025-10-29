@@ -208,8 +208,11 @@ export class SessionDurableObject {
         message: 'Transcribing voice...',
       }));
 
+      console.log('[Voice] Received audio data, length:', audioData.length);
+
       // Convert base64 to Uint8Array
       const audioBytes = Uint8Array.from(atob(audioData), c => c.charCodeAt(0));
+      console.log('[Voice] Converted to audio bytes, length:', audioBytes.length);
 
       // Use Cloudflare Workers AI Whisper model for transcription
       // The model expects a Uint8Array of audio data
@@ -217,11 +220,15 @@ export class SessionDurableObject {
         audio: [...audioBytes], // Convert Uint8Array to regular array
       });
 
+      console.log('[Voice] Whisper response:', JSON.stringify(response));
+
       const transcription = (response as { text?: string })?.text || '';
 
       if (!transcription) {
-        throw new Error('No transcription returned');
+        throw new Error('No transcription returned from Whisper');
       }
+
+      console.log('[Voice] Transcription:', transcription);
 
       // Send transcription back to client
       socket.send(JSON.stringify({
@@ -233,7 +240,7 @@ export class SessionDurableObject {
       await this.handleTextInput(transcription, socket);
 
     } catch (error) {
-      console.error('Error handling voice input:', error);
+      console.error('[Voice] Error handling voice input:', error);
       socket.send(JSON.stringify({
         type: 'error',
         message: 'Failed to process voice input: ' + (error instanceof Error ? error.message : 'Unknown error'),
@@ -276,14 +283,7 @@ export class SessionDurableObject {
       const agentResponse = await runAgentWorkflow(
         session,
         message,
-        this.env,
-        // Stream reasoning steps as they happen
-        (step) => {
-          socket.send(JSON.stringify({
-            type: 'reasoning_step',
-            step,
-          }));
-        }
+        this.env
       );
       console.log('Agent response received:', agentResponse);
 

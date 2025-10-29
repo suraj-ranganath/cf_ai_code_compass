@@ -1,4 +1,4 @@
-# 🎓 Socratic Mentor: Voice-First GitHub Repo Onboarding
+# 🧭 CodeCompass: Navigate Any Codebase Through Conversation
 
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
 [![AI Powered](https://img.shields.io/badge/AI-Llama%203.3-blue)](https://developers.cloudflare.com/workers-ai/)
@@ -6,7 +6,7 @@
 
 > **⚠️ This README is a living document and is continually updated throughout development.**
 
-A voice-first AI agent that helps developers onboard to unfamiliar GitHub repositories through Socratic dialogue. Paste a repo URL, speak your goals, and the agent will guide you through curated prerequisite readings, build a repo primer, quiz you with thought-provoking questions, and generate personalized study plans with flashcards.
+An AI-powered guide that helps developers master unfamiliar GitHub repositories through conversation. Paste a repo URL, describe your goals, and CodeCompass will guide you through the codebase using Socratic dialogue, actual code examples, and personalized learning paths.
 
 ---
 
@@ -30,15 +30,15 @@ A voice-first AI agent that helps developers onboard to unfamiliar GitHub reposi
 
 ## 🌟 Overview
 
-**Socratic Mentor** is designed to solve a common problem: understanding a new codebase quickly and deeply. Instead of passively reading documentation, this AI agent actively engages you through:
+**CodeCompass** solves a common developer challenge: understanding new codebases quickly and deeply. Instead of passive documentation reading, this AI agent actively guides you through code exploration using:
 
-1. **Repository Analysis**: Crawls the target GitHub repo to extract structure, key files, and code hotspots
-2. **Prerequisite Curation**: Assembles foundational concepts and external documentation needed
-3. **Socratic Dialogue**: Conducts an interactive voice/text walk-through with targeted questions
-4. **Personalized Learning**: Remembers what stumped you and generates a 10-15 minute micro-study plan
-5. **Flashcard Generation**: Creates 5 concept-focused flashcards for retention
+1. **Repository Analysis**: Automatically identifies structure, key files, entry points, and technologies
+2. **Semantic Code Search**: Finds relevant implementations and examples using vector embeddings
+3. **Socratic Dialogue**: Asks targeted questions that guide discovery rather than providing answers
+4. **Personalized Learning**: Tracks your progress and adapts to your learning style
+5. **Study Materials**: Generates micro-study plans and flashcards based on your struggles
 
-This project is built entirely on Cloudflare's edge platform, demonstrating production-ready AI application architecture.
+Built entirely on Cloudflare's edge platform with voice-first interaction and real-time reasoning transparency.
 
 ---
 

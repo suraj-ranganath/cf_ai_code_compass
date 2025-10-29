@@ -9,39 +9,69 @@ import { semanticSearchTool, embedTextTool } from './vectorize';
  * Load system prompt from prompts/system.socratic.txt
  * In production, this should be bundled or stored in KV
  */
-const SYSTEM_PROMPT = `You are a Socratic teaching agent specialized in helping developers understand unfamiliar codebases.
+const SYSTEM_PROMPT = `You are a Socratic teaching agent helping developers master unfamiliar codebases through guided inquiry.
 
-Your teaching philosophy:
-1. Never give direct answers - guide through questions
-2. Build on prerequisite knowledge systematically
-3. Use the actual repository code as teaching material
-4. Adapt difficulty based on user responses
-5. Celebrate progress and normalize struggle
+## Your Teaching Philosophy
+1. **Never give direct answers** - Guide through carefully crafted questions
+2. **Ground everything in code** - Use actual repository code as your teaching material
+3. **Adapt to the learner** - Adjust difficulty based on responses and struggle signals
+4. **Build systematically** - Start with architecture, then dive into specifics
+5. **Celebrate progress** - Acknowledge insights and normalize learning struggles
 
-When analyzing a repository:
-- Start with high-level architecture
-- Identify key patterns and conventions
-- Extract core abstractions
-- Map dependencies and data flow
+## Available Tools (Use These Strategically)
 
-When asking questions:
-- Begin with broad conceptual questions
-- Progressively narrow to specific implementation details
-- Provide hints if user struggles (max 2 hints)
-- Mark concepts where user struggles for flashcard generation
+You have access to powerful tools to help you teach effectively. Use them to gather context BEFORE asking questions:
 
-Available Tools - Use these strategically:
-- repo_map: Get repository structure and file overview (use FIRST when user provides new repo)
-- semantic_search: Find specific code examples and implementations (use when user asks about specific features/patterns)
-- generate_concept_primer: Create comprehensive explanations (use after gathering context with semantic_search)
-- generate_socratic_question: Create adaptive questions (use to test understanding)
-- generate_study_plan: Create structured learning paths (use when user wants organized approach)
-- generate_flashcards: Create review materials (use for concepts user struggled with)
-- embed_text: Generate embeddings (rarely needed directly)
+1. **analyze_repository_structure**: Use this FIRST when working with a new repository. It gives you the file structure, important files (entry points, configs, APIs), and detected technologies.
 
-IMPORTANT: Always use semantic_search to find relevant code examples when answering questions about specific implementations or features. Don't rely only on repo_map.
+2. **search_code**: Use this when you need to find specific code examples or implementations. It returns actual code snippets that match your search query. Perfect for when the user asks "how does X work?" or "where is Y implemented?"
 
-Your goal: Help the user build a mental model of the repository that enables confident contribution.`;
+3. **generate_concept_primer**: Create comprehensive explanations of prerequisites or complex concepts. Use after you've gathered code examples with search_code.
+
+## How to Use Tools Effectively
+
+**When starting a new repository**:
+- ALWAYS call analyze_repository_structure first to understand the layout
+- Review the important files and technologies detected
+- Use this context to ask initial questions
+
+**When user asks about specific features**:
+- Use search_code to find relevant implementations
+- Example: If they ask "how does authentication work?", search for "authentication middleware" or "login handler"
+- Base your Socratic questions on the actual code you find
+
+**When user struggles with concepts**:
+- Use search_code to find concrete examples in the codebase
+- Generate questions that connect the code to the concept
+- Don't explain - ask them to trace through the code
+
+## Question Patterns
+
+**Observational** (Entry-level):
+"Looking at this file structure, what catches your attention?"
+"In the code I found, what do you notice about how the data flows?"
+
+**Analytical** (Intermediate):
+"Why do you think the developers chose this approach?"
+"What problem does this pattern solve in this codebase?"
+
+**Predictive** (Advanced):
+"What would happen if we changed this line?"
+"How would adding a new feature here affect the rest of the system?"
+
+**Metacognitive** (Expert):
+"What strategy did you use to figure that out?"
+"How would you approach debugging this?"
+
+## Critical Rules
+
+1. **Always search for code** when user asks about implementations - don't guess or rely only on repo structure
+2. **Never mention tool names to the user** - they don't need to know you're calling "search_code", just present what you found naturally
+3. **Format code nicely** - When showing code snippets, use markdown code blocks with syntax highlighting
+4. **Cite your sources** - When referencing code, mention the file path
+5. **Track struggles** - Note when users struggle with specific concepts for later flashcard generation
+
+Your goal: Build a learner who can confidently navigate and contribute to ANY codebase by teaching them HOW to explore code, not just what the code does.`;
 
 /**
  * Available tools for the agent
@@ -52,7 +82,7 @@ export const tools: Tool[] = [
   embedTextTool,
   {
     name: 'generate_concept_primer',
-    description: 'Generate a foundational primer document that prepares users for deep code exploration',
+    description: 'Create a comprehensive explanation document for complex concepts or technologies. Use this AFTER searching for code examples to provide structured learning material. Best for explaining prerequisites, design patterns, or architectural concepts.',
     parameters: {
       type: 'object',
       properties: {
@@ -134,7 +164,7 @@ Generate a concise, actionable primer readable in 5-10 minutes.`;
   },
   {
     name: 'generate_socratic_question',
-    description: 'Generate a Socratic question that guides understanding through inquiry',
+    description: 'Create a Socratic question to test understanding of a specific code snippet or concept. Use this to generate follow-up questions after the user has seen code examples. The question should guide discovery, not test memorization.',
     parameters: {
       type: 'object',
       properties: {
@@ -389,11 +419,9 @@ Create exactly 5 flashcards. Mix difficulties: 1-2 easy, 2-3 medium, 0-1 hard.`;
 export async function runAgentWorkflow(
   session: SessionState,
   userMessage: string,
-  env: Env,
-  onReasoningStep?: (step: any) => void
+  env: Env
 ): Promise<ChatMessage> {
   try {
-    const reasoningSteps: any[] = [];
 
     // Build context about the repository for the AI
     const repoContext = session.analysis ? `
@@ -435,39 +463,11 @@ Ask questions that help the user understand the architecture, key components, an
         required: string[];
       },
       function: async (args: any) => {
-        // Capture tool invocation
-        console.log(`[REASONING] Tool called: ${t.name}`, args);
-        const step = {
-          type: 'tool_call',
-          toolName: t.name,
-          description: `Calling ${t.name}`,
-          timestamp: Date.now(),
-          args,
-        };
-        reasoningSteps.push(step);
-        
-        if (onReasoningStep) {
-          console.log('[REASONING] Sending tool_call step to WebSocket');
-          onReasoningStep(step);
-        }
+        // Log tool invocation
+        console.log(`[Tool] ${t.name} called with args:`, args);
 
         const result = await t.handler(args, env);
-        console.log(`[REASONING] Tool ${t.name} completed`);
-        
-        // Capture tool result
-        const resultStep = {
-          type: 'result',
-          toolName: t.name,
-          description: `Received result from ${t.name}`,
-          timestamp: Date.now(),
-          result: typeof result === 'string' ? result.substring(0, 200) : JSON.stringify(result).substring(0, 200),
-        };
-        reasoningSteps.push(resultStep);
-        
-        if (onReasoningStep) {
-          console.log('[REASONING] Sending result step to WebSocket');
-          onReasoningStep(resultStep);
-        }
+        console.log(`[Tool] ${t.name} completed`);
 
         // Convert result to string if it's an object
         return typeof result === 'string' ? result : JSON.stringify(result);
@@ -483,13 +483,12 @@ Ask questions that help the user understand the architecture, key components, an
       }
     ) as any;
 
-    console.log('[REASONING] Agent workflow complete. Reasoning steps:', reasoningSteps.length);
+    console.log('[Agent] Workflow complete');
 
     return {
       role: 'assistant',
       content: response.response || response.content || response || 'I understand. Let me help you with that...',
       timestamp: Date.now(),
-      reasoningSteps,
     };
   } catch (error) {
     console.error('Error in agent workflow:', error);

@@ -47,6 +47,19 @@ function chunkText(text: string, maxChunkSize: number = 1000): string[] {
 }
 
 /**
+ * Generate a short hash for vector IDs to stay under 64 byte limit
+ */
+function hashString(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  return Math.abs(hash).toString(36);
+}
+
+/**
  * Store file embeddings in Vectorize (batch processing to avoid subrequest limits)
  */
 export async function storeFileEmbeddings(
@@ -57,20 +70,23 @@ export async function storeFileEmbeddings(
   let stored = 0;
   let skipped = 0;
 
-  // Process chunks in small batches to avoid subrequest limit (50 per request)
-  // Each embedding API call + Vectorize upsert counts as subrequests
-  // Plus GitHub API calls for fetching files (~8 subrequests)
-  // Be VERY conservative: process only 5 chunks at a time to stay well under limit
-  const CHUNK_BATCH_SIZE = 5;
+  // Process only 2 chunks at a time to stay well under the 50 subrequest limit
+  // Each embedding call = 1 subrequest, upsert = 1 subrequest
+  // Total per file: 2 embeddings + 1 upsert = 3 subrequests
+  const CHUNK_BATCH_SIZE = 2;
   
   for (const file of files) {
     try {
       const chunks = chunkText(file.content);
       const vectors: any[] = [];
       
+      // Process only first few chunks to avoid subrequest limit
+      const maxChunksPerFile = 10; // Limit chunks per file
+      const chunksToProcess = chunks.slice(0, maxChunksPerFile);
+      
       // Process chunks in small batches
-      for (let i = 0; i < chunks.length; i += CHUNK_BATCH_SIZE) {
-        const chunkBatch = chunks.slice(i, i + CHUNK_BATCH_SIZE);
+      for (let i = 0; i < chunksToProcess.length; i += CHUNK_BATCH_SIZE) {
+        const chunkBatch = chunksToProcess.slice(i, i + CHUNK_BATCH_SIZE);
         
         // Generate embeddings for this batch sequentially to stay under limit
         for (let j = 0; j < chunkBatch.length; j++) {
@@ -79,8 +95,13 @@ export async function storeFileEmbeddings(
             const chunkIndex = i + j;
             const embedding = await generateEmbedding(chunk, env);
             
+            // Create short ID using hash to stay under 64 byte limit
+            const repoHash = hashString(repoName);
+            const pathHash = hashString(file.path);
+            const vectorId = `${repoHash}:${pathHash}:${chunkIndex}`;
+            
             vectors.push({
-              id: `${repoName}:${file.path}:${chunkIndex}`,
+              id: vectorId,
               values: embedding,
               metadata: {
                 type: 'code',
@@ -122,7 +143,7 @@ export async function storeFileEmbeddings(
 }
 
 /**
- * Semantic search over repository files
+ * Semantic search over repository files - returns actual code content
  */
 export async function semanticSearch(
   query: string,
@@ -141,8 +162,11 @@ export async function semanticSearch(
 
     return results.matches.map((match) => ({
       filePath: match.metadata?.filePath,
+      language: match.metadata?.language,
       score: match.score,
-      preview: match.metadata?.contentPreview,
+      content: match.metadata?.contentPreview,
+      chunkIndex: match.metadata?.chunkIndex,
+      totalChunks: match.metadata?.totalChunks,
     }));
   } catch (error) {
     console.error('Error in semantic search:', error);
@@ -251,7 +275,8 @@ export async function ingestRepository(
       })
       .slice(0, maxFiles);
 
-    // Process only a batch of files in this call
+    // Process only 2 files per batch to avoid subrequest limits
+    // Each file can have multiple chunks, each needing embeddings
     const sourceFiles = allSourceFiles.slice(startIndex, startIndex + batchSize);
     const hasMore = startIndex + batchSize < allSourceFiles.length;
 
@@ -325,23 +350,22 @@ export async function ingestRepository(
  * Tool for semantic search
  */
 export const semanticSearchTool: Tool = {
-  name: 'semantic_search',
-  description: 'Search repository files semantically based on a query',
+  name: 'search_code',
+  description: 'Search through the repository code to find relevant files and functions. Use this when you need to find specific implementations, patterns, or examples in the codebase. Returns actual code snippets that match the query.',
   parameters: {
     type: 'object',
     properties: {
       query: {
         type: 'string',
-        description: 'Natural language query to search for',
+        description: 'What to search for in natural language (e.g., "authentication middleware", "database connection logic", "error handling patterns")',
       },
       repoName: {
         type: 'string',
-        description: 'Repository name to search within',
+        description: 'The repository name to search within (use the repo name from the analysis)',
       },
       topK: {
         type: 'number',
-        description: 'Number of results to return (default 5)',
-        default: 5,
+        description: 'Maximum number of code snippets to return (default 5, max 10)',
       },
     },
     required: ['query', 'repoName'],
@@ -349,7 +373,22 @@ export const semanticSearchTool: Tool = {
   handler: async (params: { query: string; repoName: string; topK?: number }, env: Env) => {
     // Coerce topK to number if it's a string (LLM sometimes passes strings)
     const topKValue = typeof params.topK === 'string' ? parseInt(params.topK, 10) : (params.topK || 5);
-    return await semanticSearch(params.query, params.repoName, env, topKValue);
+    const results = await semanticSearch(params.query, params.repoName, env, topKValue);
+    
+    // Format results in a more useful way for the LLM
+    if (results.length === 0) {
+      return "No code found matching that query. The repository may not be fully indexed yet, or try rephrasing your search.";
+    }
+    
+    return results.map((r, i) => `
+[Result ${i + 1}] File: ${r.filePath} (${r.language})
+Relevance: ${(r.score * 100).toFixed(1)}%
+Code:
+\`\`\`${r.language}
+${r.content}
+\`\`\`
+${r.chunkIndex !== undefined ? `(Showing chunk ${r.chunkIndex + 1} of ${r.totalChunks})` : ''}
+`).join('\n---\n');
   },
 };
 
