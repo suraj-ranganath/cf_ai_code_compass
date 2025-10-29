@@ -30,12 +30,15 @@ body {
   color: var(--text-primary);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .app {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 /* Header */
@@ -108,6 +111,8 @@ body {
   margin: 0 auto;
   padding: 2rem;
   gap: 2rem;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 /* Voice Control */

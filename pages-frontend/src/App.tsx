@@ -424,7 +424,7 @@ function App() {
               🧠
             </div>
             <div className="voice-status">Learn Any Codebase Through Conversation</div>
-            <div className="voice-hint">Master unfamiliar repos with Socratic dialogue—voice or text</div>
+            <div className="voice-hint">Master unfamiliar repos with Socratic dialogue - voice or text</div>
           </div>
 
           {/* Start Form */}
@@ -541,6 +541,71 @@ function App() {
               </button>
             </div>
           </form>
+          
+          {/* Footer */}
+          <footer style={{
+            padding: '1rem',
+            textAlign: 'center',
+            borderTop: '1px solid var(--border-color)',
+            color: 'var(--text-secondary)',
+            fontSize: '0.75rem',
+            flexShrink: 0,
+            marginTop: 'auto',
+          }}>
+            <p style={{ marginBottom: '0.5rem' }}>
+              Made with ❤️ using{' '}
+              <a 
+                href="https://developers.cloudflare.com/workers-ai/" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{ 
+                  color: 'var(--primary-color)', 
+                  textDecoration: 'none',
+                  fontWeight: '500',
+                }}
+              >
+                Cloudflare AI
+              </a>
+            </p>
+            <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center', alignItems: 'center' }}>
+              <a
+                href="https://github.com/suraj-ranganath/cf_ai_repo_socratic_mentor"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  color: 'var(--text-secondary)',
+                  textDecoration: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  transition: 'color 0.2s ease',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary-color)'}
+                onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
+              >
+                <span>GitHub</span>
+                <span>↗</span>
+              </a>
+              <a
+                href="https://www.linkedin.com/in/suraj-ranganath/"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  color: 'var(--text-secondary)',
+                  textDecoration: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  transition: 'color 0.2s ease',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary-color)'}
+                onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
+              >
+                <span>LinkedIn</span>
+                <span>↗</span>
+              </a>
+            </div>
+          </footer>
         </main>
       ) : (
         <main className="main-content">
@@ -676,14 +741,14 @@ function App() {
           
           {/* Footer */}
           <footer style={{
-            padding: '2rem 1rem',
+            padding: '1rem',
             textAlign: 'center',
             borderTop: '1px solid var(--border-color)',
-            marginTop: '2rem',
             color: 'var(--text-secondary)',
-            fontSize: '0.875rem',
+            fontSize: '0.75rem',
+            flexShrink: 0,
           }}>
-            <p style={{ marginBottom: '0.75rem' }}>
+            <p style={{ marginBottom: '0.5rem' }}>
               Made with ❤️ using{' '}
               <a 
                 href="https://developers.cloudflare.com/workers-ai/" 

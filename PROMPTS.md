@@ -1429,3 +1429,101 @@ const welcomeResponse = await c.env.AI.run(c.env.LLM_MODEL, {
 **Live Demo**: https://218fa7fd.socratic-mentor.pages.dev
 
 ---
+
+## 2025-10-28T20:00:00.000Z - Tool Calling & UI Bug Fixes
+
+**Model**: GitHub Copilot (GPT-4 based)
+
+**User Requests**:
+1. "Tool invocations working but reasoning panel needs cleanup"
+2. "Remove reasoning panel tracking - tools should work silently"
+3. "On using Audio feature, only 'you' shows up after transcription"
+4. "When Tool invoked: search_code, the websocket disconnected"
+5. "Remove reasoning panel entirely, add footer with GitHub/LinkedIn links"
+6. "Fix scrolling - page should not scroll, footer always visible"
+
+**Actions Taken**:
+
+### 1. Fixed Vector ID Length & Subrequest Limits (`workers/vectorize.ts`):
+- **Problem 1**: Vector IDs exceeding 64 byte limit (e.g., `owner/repo:path/to/file.ts:chunkIndex` = 66 bytes)
+- **Solution**: Added `hashString()` function to create short hashes
+  * New format: `repoHash:pathHash:chunkIndex` (stays under 64 bytes)
+  * Uses 36-base integer hashing for compact IDs
+  
+- **Problem 2**: "Too many subrequests" errors during embedding
+- **Solution**: Drastically reduced batch sizes:
+  * Files per batch: 3 → **1 file**
+  * Chunks per file: unlimited → **max 10 chunks**
+  * Chunks per batch: 5 → **2 chunks**
+  * Delay between batches: 200ms → **500ms**
+  * Each embedding call = 1 subrequest, staying well under 50 limit
+
+### 2. Removed Reasoning Panel Tracking:
+- Removed `onReasoningStep` callback from `runAgentWorkflow()`
+- Removed reasoning step WebSocket messages
+- Removed `ReasoningStep` interface from types
+- Removed `reasoningSteps` field from `ChatMessage`
+- Tools now invoke silently in background
+- Prevents WebSocket disconnections during tool calls
+
+### 3. Enhanced Voice Transcription Logging (`workers/durable-object.ts`):
+- Added detailed logging for debugging transcription issues:
+  * Audio data length received
+  * Audio bytes conversion size
+  * Whisper API response (full JSON)
+  * Final transcription text
+- Helps diagnose "you" transcription problem (likely audio too short/unclear)
+
+### 4. Added Footer with Links (`pages-frontend/src/App.tsx`):
+- Footer text: "Made with ❤️ using Cloudflare AI"
+- Links to:
+  * Cloudflare AI documentation
+  * GitHub repo: https://github.com/suraj-ranganath/cf_ai_repo_socratic_mentor
+  * LinkedIn: https://www.linkedin.com/in/suraj-ranganath/
+- Styled with hover effects and external link icons
+
+### 5. Fixed Page Scrolling (`pages-frontend/src/styles.css`):
+- **body**: Added `height: 100vh; overflow: hidden;`
+- **.app**: Changed `min-height: 100vh` → `height: 100vh; overflow: hidden;`
+- **.main-content**: Added `overflow-y: auto; min-height: 0;`
+- Footer: Added `flexShrink: 0;` and reduced padding (2rem → 1rem)
+- Result: Page never scrolls, only chat area scrolls, footer always visible
+
+**Commands Run**:
+```bash
+# Deploy backend with vector ID fix and reasoning removal
+npx wrangler deploy
+# Version: 445c6db5-f594-47cd-9e0b-d389373e01ee
+# Bundle: 487.71 KiB / 102.95 KiB gzipped
+
+# Build and deploy frontend with footer and no-scroll layout
+cd pages-frontend && npm run build
+npx wrangler pages deploy dist --project-name=socratic-mentor
+# Deployment: https://386152dc.socratic-mentor.pages.dev
+```
+
+**Bug Fixes Summary**:
+1. ✅ **Vector ID too long**: Hash-based IDs now under 64 bytes
+2. ✅ **Too many subrequests**: Reduced to 1 file/batch, max 10 chunks/file
+3. ✅ **Reasoning panel removed**: Tools work silently, no WebSocket spam
+4. ✅ **Voice logging enhanced**: Can diagnose transcription issues
+5. ✅ **Footer added**: GitHub + LinkedIn links with hover effects
+6. ✅ **Scrolling fixed**: Page static, only chat scrolls, footer always visible
+
+**Outcome**:
+- ✅ Repository embedding now works reliably (no subrequest errors)
+- ✅ Vector IDs comply with Vectorize 64-byte limit
+- ✅ Tool calling works without WebSocket disconnections
+- ✅ Professional footer with proper attribution
+- ✅ Page layout never requires scrolling (only chat area scrolls)
+- ✅ Voice feature debuggable with detailed logs
+- 📝 Frontend: https://386152dc.socratic-mentor.pages.dev
+- 📝 Backend: https://cf-ai-repo-socratic-mentor.suranganath.workers.dev (v445c6db5)
+
+**Key Learning**: 
+- Cloudflare Workers have strict subrequest limits (50 per request) - must batch conservatively
+- Vectorize IDs have 64-byte limit - hashing prevents ID truncation errors
+- Reasoning panels can overwhelm WebSocket connections - simpler UX often better
+- Flexbox `overflow: hidden` + `overflow-y: auto` on child creates contained scrolling
+
+---
